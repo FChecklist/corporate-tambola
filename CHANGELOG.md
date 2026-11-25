@@ -23,6 +23,22 @@ The owner's gap list on top of 1.12.0 (stacked on PR #39, branch `p1/pricing-thr
 - New: `apps/web/test/gap-fixes-1-12-1.test.ts`, one group per item (a to f).
 - Changed to the new prices: every test and simulator expectation that named 2,999 / 4,999 / 7,499 or the half of 2,999 and 4,999.
 - `release-1-12-0.test.ts` now finds 1.12.0 in the list (newer releases may sit above it).
+### After the first audit round (26 Nov 2026)
+Eleven chunk audits and two final-state checks read this release (all on Sonnet 5.5, read only); the boss judged every finding. Fixed:
+- `beacon.test.ts`: the price search-and-replace had turned the millisecond offset `+ 2999` into `+ 2872` (not a price); restored, so the 3,000 ms round edge is tested again.
+- `pages.test.ts`: the test title said "no 'game'"; restored to "no 'engagement'" (the check itself was right).
+- `wp06-price-footer.test.ts`: the footer check now fails when the `ufpay` block is missing instead of passing on an empty match; the title says what it checks.
+- Console: "Automatic + host speaks" and "AI voice + host speaks" now say "Co-organizer speaks"; the message to a new Co-organizer says "players", not "participants". The claims queue shows "Being checked" when a status is unknown, never "undefined".
+- AI manual (`ai-link.ts`): the tie rule is told (the game's own setting: next prizes one after the other, or share); the payment line says a credit left from a cancelled game is a separate thing from Moneypenny credits. Measured manual length 38,585 characters against the 39,000 guard.
+- Pages: the partner page's static example shows the partner's half of a Large game (3,941), not the full price; a new test pins 1,436 and 3,941 and none of the older halves. Home page: "Designed for company employees and their extended families" (test follows), the data answer names the Co-organizers, not the host; the price page intro lost "(one game)".
+Judged and left on purpose (known limits, written here so they are not raised again as new):
+- Existing "host" words on the phone, the big screen, the board and the story line ("Waiting for the host", "Paused by the host", "The host calls the numbers", `whoLines` "Host:", the step name "Make hosts and co-hosts") are asserted by about twenty older tests and simulators and are the role that calls the numbers; a whole-site wording pass is an owner decision.
+- The pasted AI instructions keep "Host" as the helper role (the AI notes are not in this release's wording list); the API role value `host` is unchanged.
+- The tick boxes of the old consent and start sheets (`roleConsent`, `ck1`, `ck2`) are older lines, not new ones; whether an organizer confirmation counts as a tick box under the owner's rule is an owner decision.
+- The payment screens (`common.js` `payBrand`, `payReceipt`, `pay.js`, the checkout sheet in `site.js`) still name the gateway: they are payment pages, not marketing pages (see above).
+- The brochure cups say "guests" (the PDF needs a rebuild to change them; `pdf-assets.test.ts` pins the words). The US$ figures on the price page (34 / 67 / 101) were not recalculated: the owner has named rupee prices only.
+- Prices on `pricing.html`, `index.html` and the fallback in `zc.js` are written in the pages; they are pinned by `pricing-cups.test.ts` (literal expectations) and the one constant is mirrored by test, not generated.
+- The "More options" prize houses, the 30-minute pause wording and "an AI key cannot pay" are covered by `gap-fixes-1-12-1.test.ts` (c, b) and `param-money.test.ts` / `usecases.test.ts`; a missing `count` in a claim result keeps the old display rule (display only; the software still decides).
 
 ## 1.12.0 - 2026-11-24
 New prices with three cups, on top of 1.11.2 (master `6d38283`). Not deployed and not merged. Needs two independent audits on the exact head commit before any deploy. 1.11.0 is the live release (commit `8a4a0bed`); 1.11.1 and 1.11.2 are merged into master but not deployed, so a deploy of this release also ships them. The money flags stay off and no payment code is touched; payments are still taken only by IT Services by Rajat Agarwal through Razorpay.

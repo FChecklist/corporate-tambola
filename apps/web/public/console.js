@@ -267,7 +267,7 @@
       </div>
       <div class="grid">
         <div><label class="lb">Tickets per player</label>${chips("set", "ticketMode", "s", [["single", "1 ticket"], ["double", "2 tickets"]], e.ticketMode, ro)}<p class="hint">${e.ticketMode === "double" ? "Each player gets two tickets. A “Full Two-Ticket House” reward becomes possible." : "Each player gets one ticket."}</p></div>
-        <div><label class="lb">How numbers are called</label>${chips("set", "callMode", "s", [["ai", "Automatic"], ["manual", "Co-organizer voice"], ["both", "Automatic + host speaks"]], e.callMode, ro)}<p class="hint">${esc(modeHint)}</p></div>
+        <div><label class="lb">How numbers are called</label>${chips("set", "callMode", "s", [["ai", "Automatic"], ["manual", "Co-organizer voice"], ["both", "Automatic + Co-organizer speaks"]], e.callMode, ro)}<p class="hint">${esc(modeHint)}</p></div>
         <div><label class="lb">Voice</label><div class="pill wine" style="margin-top:4px">${ic("mic")} Indian English, female, slow and clear</div></div>
       </div></div>`]];
   }
@@ -480,7 +480,7 @@
   const matchF = (p, f) => f === "all" || (f === "host" && p.role === "host") || (f === "team_lead" && p.role === "team_lead") || (f === "family" && p.kind === "family") || (f === "colleague" && p.kind === "colleague") || (f === "notjoined" && p.status !== "joined");
   function waMsg(p) {
     const e = eng(), f = firstName(p.name), link = p.roleLink || p.passLink || "";
-    if (p.role === "host") return `Hi ${f}, you are a Co-organizer for ${e.name}. Open your link to help admit participants: ${link}\nPlease don't forward this link.`;
+    if (p.role === "host") return `Hi ${f}, you are a Co-organizer for ${e.name}. Open your link to help admit players: ${link}\nPlease don't forward this link.`;
     if (p.role === "team_lead") return `Hi ${f}, you are a Team Lead for ${e.name}. Open your link to bring in up to ${p.cap} colleagues: ${link}\nPlease don't forward this link. It works on one phone only.`;
     return `Hi ${f}, here is your personal pass for ${e.name}: ${link}\nIt works on one phone only, so please don't forward it.`;
   }
@@ -626,7 +626,7 @@
       <div class="kv"><span>Brand breaks</span><b>${S.data.breaks.length}${missing ? " · " + missing + " without a link" : ""}</b></div>
       ${sxOn(sx()) ? `<div class="kv"><span>Rounds and surprises</span><b>${esc(nOf(sx().rounds, "round", "rounds") + (sx().luckyDraws ? " · " + nOf(sx().luckyDraws, "lucky draw", "lucky draws") : "") + (sx().scratchCards ? " · " + nOf(sx().scratchCards, "scratch card", "scratch cards") : ""))}</b></div>` : ""}
       <div class="kv"><span>Tickets</span><b>${e.ticketMode === "double" ? "2 per player" : "1 per player"}</b></div>
-      <div class="kv"><span>Numbers called by</span><b>${{ ai: "Automatic", manual: "Co-organizer voice", both: "AI voice + host speaks" }[e.callMode]}</b></div></div>
+      <div class="kv"><span>Numbers called by</span><b>${{ ai: "Automatic", manual: "Co-organizer voice", both: "AI voice + Co-organizer speaks" }[e.callMode]}</b></div></div>
       ${c.joined === 0 ? `<div class="note warn">${ic("alert")}<span>Nobody has joined yet.</span></div>` : ""}
       ${missing ? `<div class="note warn">${ic("alert")}<span>A brand break has no video link. Add it in step 4 or remove the break.</span></div>` : ""}
       <label class="cb"><input type="checkbox" ${S.ck1 ? "checked" : ""} data-c="ck1"> <span>Everyone I want has been admitted.${c.waiting ? ` <span class="pill warn">${c.waiting} still waiting</span>` : ""}</span></label>

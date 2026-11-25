@@ -33,7 +33,7 @@ describe("UTC time from rounds", () => {
   test("roundAt inverts roundTimeMs", () => {
     for (const r of [1, 2, 1000, REAL.round]) {
       expect(roundAt(roundTimeMs(r))).toBe(r);
-      expect(roundAt(roundTimeMs(r) + 2872)).toBe(r);
+      expect(roundAt(roundTimeMs(r) + 2999)).toBe(r);
       expect(roundAt(roundTimeMs(r) + 3000)).toBe(r + 1);
     }
   });

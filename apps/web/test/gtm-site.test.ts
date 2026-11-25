@@ -40,6 +40,11 @@ describe("prices are the price table, everywhere a rupee amount appears", () => 
   test("the pricing page lists all eight packs with the table prices, and the brochure does too", () => {
     for (const f of ["pricing.html", "brochure.html"]) { const t = textOf(read(f)); for (const [pack, p] of PACKS) expect(t, `${f} ${pack}`).toContain("₹" + p.toLocaleString("en-IN")); }
   });
+  test("partner.html shows the partner's half of the owner's prices (1,436 for Small, 3,941 for Large) and none of the older halves", () => {
+    const t = textOf(read("partner.html"));
+    expect(t).toContain("₹1,436"); expect(t).toContain("₹3,941");
+    for (const old of ["1,499", "2,499", "3,749"]) expect(t).not.toContain(old); // the halves of the older 2,999 / 4,999 / 7,499
+  });
   test("no GST is added while the seller is not registered: the pricing page says so and shows no 18% line", () => {
     const t = textOf(read("pricing.html")); expect(t).not.toMatch(/\+\s?18%|plus GST|GST extra/i);
   });

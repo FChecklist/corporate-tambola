@@ -13,3 +13,4 @@ Small (up to 100 players) Rs 2,872, Medium (up to 500) Rs 4,872, Large (up to 1,
 - "Co-host" (older role) was left; "Host" became "Co-organizer".
 - The legal pages still say "Host" and name the gateway (legal text, not reworded). The brochure PDF was rebuilt.
 - The ban on "my / your" in user text is applied to new lines only.
+- After the first audit round (26 Nov 2026) a few real faults were fixed and the rest judged and left on purpose: see `CHANGELOG.md`, section 1.12.1, "After the first audit round". Open for the owner: the whole-site "host" to "Co-organizer" pass (phones, board, big screen, story), the US$ figures, the brochure "guests" and PDF rebuild, and whether an organizer confirmation is a tick box.

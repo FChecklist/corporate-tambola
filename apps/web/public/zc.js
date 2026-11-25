@@ -1117,7 +1117,7 @@
     if (!S.started || S.draft || !ZG.claimsQueue) return "";
     const q = ZG.claimsQueue(S.claims || [], S.published || [], ZG.BOGEYS_OUT), prize = (k) => ((ZG.PRIZE_HOUSES || []).find((h) => h.id === String(k).split("@")[0]) || { label: k }).label;
     const st = { won: "Won", "being-checked": "Being checked", "not-a-winner": "Not a winner" };
-    const rows = q.queue.slice(-30).reverse().map((r) => rowl(`Ticket ${r.ticket} · ${esc(prize(r.pattern))} · call ${r.call}`, `<b>${st[r.status]}</b>`)).join("");
+    const rows = q.queue.slice(-30).reverse().map((r) => rowl(`Ticket ${r.ticket} · ${esc(prize(r.pattern))} · call ${r.call}`, `<b>${st[r.status] || "Being checked"}</b>`)).join("");
     const wrong = q.wrong.slice(0, 30).map((r) => rowl(`Ticket ${r.ticket} · ${esc(prize(r.pattern))}`, `<b>${r.times} wrong ${r.times === 1 ? "claim" : "claims"}${r.out ? " · out of this prize" : ""}</b>`)).join("");
     return `<div class="zc-block" id="claimsqueue"><h3>Claims queue</h3>${q.queue.length ? rows : small("No claim yet.")}${small(q.waiting ? `${q.waiting} being checked now. The software checks every claim; nothing is needed from you.` : "Every claim so far has been checked.")}
       <h3 id="wrongclaims">Wrong claims</h3>${q.wrong.length ? wrong : small("No wrong claim so far.")}${small("A player who claims wrongly is told at once and the game goes on. Two wrong claims for the same prize put that ticket out of that prize only.")}</div>`;
