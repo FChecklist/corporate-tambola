@@ -29,7 +29,7 @@ describe("old cached common.js beside new site.js / paykit.js", () => {
     p.win.document.getElementById("coForm").dispatchEvent(new p.win.Event("submit", { cancelable: true }));
     await new Promise((r) => setTimeout(r, 300));
     const body = p.win.document.body.textContent as string;
-    expect(body).toContain("Your engagement is ready");
+    expect(body).toContain("Your game is ready");
     expect(body).not.toMatch(/mailNote is not a function|not a function/);
     expect(p.win.document.getElementById("fErr")?.textContent ?? "").toBe(""); // no raw error on the done screen
     expect(p.win.document.getElementById("cpKey")).not.toBeNull(); // the key and its copy button are there

@@ -20,7 +20,7 @@ function page(search: string) {
 test("flow=new draws five steps, the top strip and a locked Game dashboard", () => {
   const win = page("?flow=new");
   const d = win.document;
-  expect(d.querySelector(".zf-top").textContent).toBe("No personal details needed. All participant information is deleted within 24 hours of the game.");
+  expect(d.querySelector(".zf-top").textContent).toBe("No personal details needed. All player information is deleted within 24 hours of the game.");
   expect([...d.querySelectorAll(".zf-bar [data-step]")].length).toBe(5);
   const dash = d.getElementById("zf-dash");
   expect(dash.hasAttribute("disabled")).toBe(true);
@@ -61,5 +61,5 @@ test("every word the organizer reads follows the language guide", () => {
   const F = page("?flow=new").ZFLOW;
   const all = [...Object.values(F.COPY), ...F.STEPS.map((s: any) => s.name)].join(" | ");
   expect(F.badWords(all)).toEqual([]);
-  for (const bad of ["We invite you", "a private game", "Rs 2,999", "cash prize", "places left"]) expect(F.badWords(bad).length).toBeGreaterThan(0);
+  for (const bad of ["We invite you", "a private game", "Rs 2,872", "cash prize", "places left"]) expect(F.badWords(bad).length).toBeGreaterThan(0);
 });

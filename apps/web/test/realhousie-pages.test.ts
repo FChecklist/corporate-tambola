@@ -71,7 +71,7 @@ describe("the ticket on the phone never marks itself", () => {
     const mine0 = ticketNums(p); for (let i = 0; i < 40 && !mine0.some((n) => rt.view().log.includes(n)); i++) { x.step(6000); await tick(p); } await wait(1200); // until one of the ticket's own numbers has been called
     expect(doc.querySelectorAll('.zticket [data-tap][role="button"]').length).toBe(15);
     expect(doc.querySelectorAll(".zticket div.m").length).toBe(0); // numbers called, nothing marked by itself
-    expect(p.text()).toMatch(/Tap each number as it is called\. When a prize is complete, press Claim before the next number is called\. A wrong claim is a Bogey: it does not count\./);
+    expect(p.text()).toMatch(/Tap each number as it is called\. Press Claim before the next number is called\. One Claim is for one prize\. If a claim is not right, you are told at once and the game goes on\./); // 1.12.1: the short claim rules (was the older tip with 'A wrong claim is a Bogey')
     const called = new Set<number>(rt.view().log), mine = ticketNums(p);
     const notYet = mine.find((n) => !called.has(n))!, yes = mine.find((n) => called.has(n))!;
     cell(p, notYet).click(); await wait(50);

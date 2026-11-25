@@ -1,4 +1,4 @@
-// D2 (live test, 3 Nov 2026, phone screenshot p9-admitted): on the "Before the game" card the values of Game ID, Participant ID and Ticket ID were almost invisible.
+// D2 (live test, 3 Nov 2026, phone screenshot p9-admitted): on the "Before the game" card the values of Game ID, Player ID and Ticket ID were almost invisible.
 // The box (.zckids) keeps its cream background in every look, but its values (<b>) had no colour of their own, so they took the page text colour, which the Retro and
 // Modern looks make pale. Each word in the box must now carry its own dark colour with at least the WCAG AA contrast (4.5:1) on the cream, in every look.
 import { describe, expect, test } from "bun:test";
@@ -21,9 +21,9 @@ const lum = (hex: string) => {
 };
 const contrast = (a: string, b: string) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x! + 0.05) / (y! + 0.05); };
 
-describe("D2: the Game ID, Participant ID and Ticket ID on the Before the game card are dark and readable", () => {
+describe("D2: the Game ID, Player ID and Ticket ID on the Before the game card are dark and readable", () => {
   test("the card's markup: each label is a <span>, each value a <b>, inside .zckids", () => {
-    expect(z).toContain('<div class="zckids"><div><span>Game ID</span><b>${esc(CK.ids.game)}</b></div><div><span>Participant ID</span><b>${esc(CK.ids.participant)}</b></div><div><span>Ticket ID</span><b>${esc(CK.ids.ticket)}</b></div></div>');
+    expect(z).toContain('<div class="zckids"><div><span>Game ID</span><b>${esc(CK.ids.game)}</b></div><div><span>Player ID</span><b>${esc(CK.ids.participant)}</b></div><div><span>Ticket ID</span><b>${esc(CK.ids.ticket)}</b></div></div>');
   });
   test("the box is cream, and the labels and the values each carry their own colour with at least 4.5:1 on it", () => {
     const bg = prop(rule(".zckids"), "background");

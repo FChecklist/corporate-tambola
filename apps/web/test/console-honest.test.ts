@@ -14,6 +14,6 @@ describe("the new console promises nothing the engine cannot do", () => {
   test("what each role reads about who lets people in is only the truthful part", () => {
     const w: any = {}; new Function("window", pub("zc-flow-roles.js"))(w);
     for (const r of ["cohost", "host", "organizer"]) expect(/Co-host can|family/i.test(w.ZROLES.approvalText(r))).toBe(false);
-    expect(w.ZROLES.approvalText("organizer")).toContain("wait for you or a Host");
+    expect(w.ZROLES.approvalText("organizer")).toContain("wait for you or a Co-organizer");
   });
 });
