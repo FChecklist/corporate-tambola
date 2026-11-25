@@ -7,7 +7,7 @@
  *  - Pages: network first (new versions arrive when online), the saved copy when offline.
  *  - Other files: the saved copy at once, refreshed quietly in the background.
  */
-const CACHE = "ct-game-v47"; // v47 (1.11.2): guide.js changed its Help Desk invitation text, so saved copies are renewed. v46 (1.11.0): common.js gained TB.mailNote, so every phone saves a matching set. Bump when the game files change shape, so every phone saves a matching set
+const CACHE = "ct-game-v48"; // v48 (1.13.0): z.html, z.js and this file changed (the game-alert button, dark until its address is set), so saved copies are renewed. v47 (1.11.2): guide.js changed its Help Desk invitation text, so saved copies are renewed. v46 (1.11.0): common.js gained TB.mailNote, so every phone saves a matching set. Bump when the game files change shape, so every phone saves a matching set
 const FILES = ["/claimnote.js", "/lang/ui.js", "/lang/hi.js", "/v2.js", "/offline.html", "/offline.js", "/z.html", "/zc.html", "/zc-mode.js", "/trynew.js", "/big.html", "/board.html", "/consent.js", "/blackbox.js", "/guide.js", "/z.js", "/rights.js", "/zc.js", "/big.js", "/zgame.js", "/control.js", "/audio.js", "/common.js",
   "/app.css", "/z.css", "/big.css", "/fonts.css", "/pwa.js", "/autoupdate.js", "/keep.js", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/logo-mark.svg",
   "/fonts/Fraunces-italic-500.woff2", "/fonts/Fraunces-normal-500-700.woff2", "/fonts/IBMPlexMono-normal-500.woff2", "/fonts/Inter-normal-400.woff2"];
@@ -65,10 +65,16 @@ async function showNews() {
 }
 self.addEventListener("periodicsync", (e) => { if (e.tag === "ct-news") e.waitUntil(showNews()); });
 self.addEventListener("notificationclick", (e) => {
+  const to = e.notification.data && e.notification.data.url;
+  if (typeof to === "string" && /^https:\/\//i.test(to)) return; // a game alert from the notification service (an absolute https address): the handler of sw-push-snippet.js, loaded below, opens it
+  e.stopImmediatePropagation(); // our own news (an address on this site): handled here only, so the snippet's handler cannot open a second window
   e.notification.close();
   const url = (e.notification.data && e.notification.data.url) || "/";
   e.waitUntil(self.clients.matchAll({ type: "window" }).then((cs) => { for (const c of cs) if ("focus" in c) { c.navigate(url).catch(() => {}); return c.focus(); } return self.clients.openWindow(url); }));
 });
+
+// Game alerts ("notify me when this game begins", push-boot.js): the two handlers of the notification service (push, notificationclick), loaded exactly as the service ships them. They sit AFTER the news handler above on purpose (see its first lines). Without the file only the alerts are missing: the game and the news work as before.
+try { importScripts("/sw-push-snippet.js"); } catch { /* not reachable now: tried again when the browser next checks this file */ }
 
 self.addEventListener("fetch", (e) => {
   const req = e.request;

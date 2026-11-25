@@ -26,6 +26,7 @@ import { layoutReport, layoutPeoplePart, istDate, istFull, emptyAgg, type Agg, t
 import { purgeOutbox, retryOutbox, sendReportMail, type PayEnv } from "./pay";
 import { eraseCohostsSql, mailDataDeleted, mailErasureHeadsUp } from "./cancel";
 import { creditTick } from "./credit";
+import { purgeGameAlerts } from "./push";
 import type { D1, Env } from "./worker";
 
 export const GENESIS = 1692803367;
@@ -231,6 +232,7 @@ export async function erasePersonal(env: Env, eid: string, now: number, by: stri
     env.DB.prepare("INSERT INTO life(eid,end_ms,end_src,purged_ms,report_state) VALUES(?,?, 'purge', ?, ?) ON CONFLICT(eid) DO UPDATE SET purged_ms=?, report_state=COALESCE(life.report_state, ?)").bind(eid, now, now, by, now, by),
   ]);
   await shredParticipantAudit(env as any, eid, now); // best effort inside: a held engagement keeps its log until the hold is lifted, then the tick shreds it
+  try { await purgeGameAlerts(env as any, eid, now); } catch { /* the notification service's own 24-hour limit still ends it */ } // the game's "notify me" browser addresses go with the game (push.ts); nothing happens unless PUSH_URL and PUSH_ADMIN_KEY are both set
 }
 /** Everything about an engagement, at the end of its 365 days (or for a draft nobody published). */
 export async function eraseEverything(env: Env, id: string, now = Date.now()): Promise<void> {

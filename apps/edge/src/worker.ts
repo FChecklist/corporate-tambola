@@ -66,6 +66,7 @@ import { hostGameOf } from "../../../packages/beacon/src/game";
 import { buildGameLog, readSavedGameLog } from "./gamelog";
 import { CLAIM_LATE_MSG } from "./modes";
 import { callTimeMs } from "./lifecycle";
+import { PUSH_SCHEMA, pushTick } from "./push";
 import { V2_SCHEMA } from "./v2-schema";
 import { v2Route, v2AiLabel, v2Purge } from "./v2";
 import { claimHolds, startClaimHold, storedHolds } from "./claimhold";
@@ -94,6 +95,8 @@ export interface Env {
   ANALYZE_AI_URL?: string; ANALYZE_AI_KEY?: string; ANALYZE_AI_MODEL?: string;
   /** Optional and public (it is not a secret): the Google sign-in client id. Without it the "Continue with Google" button is hidden and /api/auth/google answers 404. */
   GOOGLE_CLIENT_ID?: string;
+  /** Optional, BOTH or neither (push.ts): the https address of the notification service and its admin key (a secret). With either missing the game-alert button is dark and nothing is ever sent or purged. */
+  PUSH_URL?: string; PUSH_ADMIN_KEY?: string;
 }
 const controlKey = (id: string) => `c/${id}.json`;
 const controlUrl = (env: Env, id: string) => (env.CONTROL_BASE && env.CONTROL_R2 ? `${env.CONTROL_BASE.replace(/\/$/, "")}/${controlKey(id)}` : null);
@@ -253,6 +256,8 @@ export const SCHEMA: string[] = [
   ...V2_SCHEMA,
   // mail lanes (1.11.0, 0033_mail_lanes.sql): the send counter, the per-mail state from the provider, the do-not-mail list, the waiting bulk mail (mail-lanes.ts)
   ...MAIL_LANES_SCHEMA,
+  // game alerts (1.13.0, 0034_push_alert.sql): the flag that keeps the "game begins" alert to once per game (push.ts)
+  ...PUSH_SCHEMA,
 ];
 
 const PATTERNS = new Set<string>([...HOUSE_ORDER.filter((k) => k !== "unlucky"), "lucky"]);
@@ -596,6 +601,7 @@ export async function runTick(env: Env, now: number) {
   await remindDrafts(env, now);
   const ledgerC = await ledgerCTick(env as PayEnv, now); // ledger C -> B: a few commission rows and, every 30 minutes, the monthly figures (ledgerc.ts)
   const life = await lifecycleTick(env as any, now);
+  await pushTick(env as any, now, (e) => callTimeMs(env, e, 1, 0)).catch(() => null); // the "game begins" alert, once per game, and any purge that failed (push.ts); dark unless PUSH_URL and PUSH_ADMIN_KEY are both set
   const purged = await purgeOld(env, now);
   const mailRetried = await retryRecentOutbox(env as PayEnv, now).catch(() => 0); // a mail that failed (an invoice, a paid note) is tried again within minutes, not at the next daily job (RCA 2026-11-20)
   await drainBulkMail(env as PayEnv, now).catch(() => 0); // waiting bulk mail goes AFTER the transactional retry and only when none is waiting (mail-lanes.ts, 1.11.0)
