@@ -1,4 +1,4 @@
-/* Corporate Tambola: the page where an organizer pays to publish a draft engagement. Opens after they confirm their email and mobile number.
+/* Corporate Tambola: the page where an organizer pays to publish a draft game. Opens after they confirm their email and mobile number.
    The organizer key comes from this browser tab (set when the console was opened). The SERVER decides the pack and verifies the payment.
    The payer is asked for nothing but the country (it decides the currency); Razorpay asks for the mobile and the e-mail. After the payment the page shows what Razorpay gave us and a short
    optional form for the invoice (name, company, GST / Tax ID) with a Skip button. The look and the behaviour are the shared payment kit (paykit.js), the same in all six games;
@@ -42,18 +42,18 @@
         aside: PK.summary({ game: { id: gid, name: (S.info && S.info.name) || gid, startMs: S.info && S.info.startMs, participants: pack || null }, price: d.total ? { total: d.total, base: d.total, gst: 0, currency: d.currency || cur() } : null, paid: true, totalLabel: "Paid" }) + PK.trust(),
         col: PK.receipt(d, {
           title: d.converted ? "Payment received. Your demo game is now a real game." : "Payment received. Your game will begin on time.", form: PK.invoiceForm(S, d), forHtml: `Game ID <span class="pk-mono">${esc(gid)}</span>`,
-          lead: `${d.paidFromCredit ? "Paid from your credit. " : ""}Thank you. Your game for up to <b>${nf(pack)}</b> participants is confirmed.${d.converted ? " It carries on exactly as it is: the same link, the same people, the same numbers. The DEMO GAME mark goes away on the next refresh and more people can join." : ""}${d.restartedAtMs ? ` It begins at <b>${esc(new Date(d.restartedAtMs).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }))}</b>, for everyone already waiting.` : " Share the link with your participants from your console if you have not already."}`,
+          lead: `${d.paidFromCredit ? "Paid from your credit. " : ""}Thank you. Your game for up to <b>${nf(pack)}</b> players is confirmed.${d.converted ? " It carries on exactly as it is: the same link, the same people, the same numbers. The DEMO GAME mark goes away on the next refresh and more people can join." : ""}${d.restartedAtMs ? ` It begins at <b>${esc(new Date(d.restartedAtMs).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }))}</b>, for everyone already waiting.` : " Share the link with your players from your console if you have not already."}`,
           after: `${d.invoiceUrl ? '<p class="pk-note">We also emailed it to the organizer.</p>' : ""}<div class="pk-btns">${open(gid)}</div>`,
         }),
       });
     }
-    if (!S.info) return `${back()}${S.err ? head("We could not open this engagement", esc(S.err)) : PK.layout({ title: "Publish your game", lead: "Loading the game details…", wait: 1, step: 1, aside: PK.summarySkeleton(), col: '<section class="pk-card" aria-busy="true"><div class="pk-skel l1"></div><div class="pk-skel l2"></div><div class="pk-skel l3"></div></section>' })}`;
+    if (!S.info) return `${back()}${S.err ? head("We could not open this game", esc(S.err)) : PK.layout({ title: "Publish your game", lead: "Loading the game details…", wait: 1, step: 1, aside: PK.summarySkeleton(), col: '<section class="pk-card" aria-busy="true"><div class="pk-skel l1"></div><div class="pk-skel l2"></div><div class="pk-skel l3"></div></section>' })}`;
     if (S.wait) return waitCard();
     const pack = packNow();
     if (!S.info.draft && !S.info.unpaid && !isDemo()) return `${back()}${head("This game is already paid and published")}<section class="pk-card pk-single"><a class="pk-btn" href="/zc.html?e=${encodeURIComponent(eid)}">Open my game</a></section>`;
-    if (!pack) return `${back()}${head("A custom arrangement is needed", "An engagement for more than 10,000 participants is arranged with us directly. Please write to us from the contact page.")}`;
+    if (!pack) return `${back()}${head("A custom arrangement is needed", "A game for more than 10,000 players is arranged with us directly. Please write to us from the contact page.")}`;
     const c = cur(), known = !!PK.cur(S), x = TB.price(pack, c);
-    const applied = c === "INR" ? Math.max(Number(S.credited) || 0, Number(S.info.creditApplied) || 0) : 0; // credit already put on this game (by you, or by a Host); it comes off what you pay
+    const applied = c === "INR" ? Math.max(Number(S.credited) || 0, Number(S.info.creditApplied) || 0) : 0; // credit already put on this game (by you, or by a Co-organizer); it comes off what you pay
     const toPay = Math.max(0, Math.round((x.total - applied) * 100) / 100);
     const avail = c === "INR" && !applied && Number(S.info.credit) > 0 ? Number(S.info.credit) : 0;
     const until = S.info.creditExpiresMs ? new Date(S.info.creditExpiresMs - 1).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric" }) : "";
@@ -64,9 +64,9 @@
       title: isDemo() ? "Make this a real game" : "Publish your game", step: S.busy ? 2 : 1,
       lead: `Payment is for Game ID <b class="pk-mono">${esc(eid)}</b>; Amount <b>${known ? esc(TB.money(due, c)) : "to be shown"}</b>;`,
       aside: PK.summary({ game: { id: eid, name: S.info.name || eid, startMs: S.info.startMs, participants: pack }, noPrice: !known, price: { total: due, base: x.base, gst: x.tax, currency: c }, listTotal: applied ? x.total : null, creditUsed: applied || 0, totalLabel: applied ? "To pay now" : "Total to pay" }) + PK.trust(),
-      col: `${off ? '<div class="pk-msg info" role="status">' + PK.icons.info + '<span><b>Online payment opens soon.</b> Your engagement is saved and nothing is lost. Come back to this page when payment is switched on. Until then it stays held at its start time.</span></div>' : ""}
+      col: `${off ? '<div class="pk-msg info" role="status">' + PK.icons.info + '<span><b>Online payment opens soon.</b> Your game is saved and nothing is lost. Come back to this page when payment is switched on. Until then it stays held at its start time.</span></div>' : ""}
         ${isDemo() ? `<section class="pk-card" id="makereal"><h2><span class="pk-tag">DEMO GAME</span> Make this a real game</h2><p class="pk-sub">This is a free demo game for up to ${nf(S.info.cap)} people. Choose how many people the real game is for and pay. The game carries on exactly as it is: the same link, the same people, the same numbers. The DEMO GAME mark goes away on the next refresh and more people can join.</p><div class="pk-btns" role="group" aria-label="How many people?">${TB.PACKS.map((k) => `<button type="button" class="pk-btn sm${k[0] === pack ? "" : " alt"}" data-pack="${k[0]}" aria-pressed="${k[0] === pack}">Up to ${nf(k[0])}${known ? " · " + esc(TB.money(TB.price(k[0], c).total, c)) : ""}</button>`).join("")}</div></section>` : ""}
-        <section class="pk-card"><h2>About this payment</h2><p class="pk-sub">Every participant gets their own ticket on their phone. Participants never pay: you give the rewards. A paid game cancelled before it starts stays with you as credit for your next game, valid for 365 days. Unused credit lapses at the end of day 365. The credit belongs to your organizer account.</p>${pending}</section>
+        <section class="pk-card"><h2>About this payment</h2><p class="pk-sub">Every player gets their own ticket on their phone. Players never pay: you give the rewards. A paid game cancelled before it starts stays with you as credit for your next game, valid for 365 days. Unused credit lapses at the end of day 365. The credit belongs to your organizer account.</p>${pending}</section>
         ${avail ? `<section class="pk-card done"><h2>Use your credit</h2><p class="pk-sub">You have credit of <b>${esc(TB.money(avail, "INR"))}</b>${until ? ` (valid until ${esc(until)})` : ""}. Use it for this game.</p>${S.err && S.creditErr ? `<div class="pk-msg bad" role="alert">${PK.icons.alert}<span>${esc(S.err)}</span></div>` : ""}<button class="pk-btn" id="usecredit" type="button" ${S.busy ? "disabled" : ""}>Use my credit</button></section>` : ""}
         ${PK.countryLine(S)}
         ${TB.proformaBox()}
@@ -138,18 +138,18 @@
   (async () => {
     if (!secret) return draw();
     draw();
-    if (!eid) { S.err = "No engagement was chosen."; return draw(); }
+    if (!eid) { S.err = "No game was chosen."; return draw(); }
     try {
       await PK.where(S);
       const st = await fetch("/api/payments/status").then((r) => r.json()); S.mode = st.mode;
-      const h = await call("GET", `/api/z/${eid}/cohost`); S.wait = (h.payment && (h.payment.status || h.payment)) === "confirming" ? "load" : ""; // only the Organizer, a Host or a Co-host of THIS game's account passes; anyone else gets a 403 and a calm message
+      const h = await call("GET", `/api/z/${eid}/cohost`); S.wait = (h.payment && (h.payment.status || h.payment)) === "confirming" ? "load" : ""; // only the Organizer, a Co-organizer or a Co-host of THIS game's account passes; anyone else gets a 403 and a calm message
       try { S.info = await call("GET", `/api/z/${eid}/info`); }
       catch (e0) { // a Co-host may pay but cannot read the game: use the small game header they are allowed
         if (e0.status !== 403) throw e0;
         S.info = { cap: h.cap, startMs: h.startMs, draft: !h.inviteLink, unpaid: !h.payment || h.payment.status !== "paid", credit: h.credit, creditExpiresMs: h.creditExpiresMs, creditApplied: h.creditApplied, erasureMs: h.erasureMs };
       }
       if (S.paid) { const r = await PK.loadReceipt(S); if (r) S.done = r; else { S.paid = ""; save(); } } // a reload after paying: the receipt and the optional invoice details come back
-    } catch (e) { S.err = e.status === 403 || e.status === 404 ? "We could not open this engagement with your sign-in. Open it from your console." : e.message; }
+    } catch (e) { S.err = e.status === 403 || e.status === 404 ? "We could not open this game with your sign-in. Open it from your console." : e.message; }
     draw();
   })();
 })();

@@ -28,7 +28,7 @@ describe("every page has the basics", () => {
 
 describe("prices are the price table, everywhere a rupee amount appears", () => {
   const allowedElsewhere: Record<string, Set<string>> = {
-    "partner.html": new Set([...PACKS.map((p) => (p[1] * 0.5).toLocaleString("en-IN", { minimumFractionDigits: 2 })), "4,999", "0"]),
+    "partner.html": new Set([...PACKS.map((p) => (p[1] * 0.5).toLocaleString("en-IN", { minimumFractionDigits: 2 })), ...PACKS.map((p) => (p[1] * 0.5).toLocaleString("en-IN")), "0"]),
     "legal-position.html": new Set(["50,000"]),
   };
   for (const f of pages) {

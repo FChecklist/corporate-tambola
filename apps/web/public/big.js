@@ -1,5 +1,5 @@
-/* Corporate Tambola big screen: shows the engagement to a room on a projector or TV. No sign-in and no personal data: it only reads the public
-   numbers (the same ones every phone uses) and the public count of winners. It never joins the engagement. */
+/* Corporate Tambola big screen: shows the game to a room on a projector or TV. No sign-in and no personal data: it only reads the public
+   numbers (the same ones every phone uses) and the public count of winners. It never joins the game. */
 (function () {
   const ZG = window.ZG;
   const $app = document.getElementById("app");
@@ -30,7 +30,7 @@
       if (S.now === null) { S.err = "Waiting for the clock…"; return; }
       const lv = S.cf && S.cf.live; if (lv && S.info) S.info = { ...S.info, startRound: lv.startRound, callSeconds: lv.callSeconds, callMode: lv.callMode, startMode: lv.startMode, afterPrizes: lv.afterPrizes }; // a time or mode changed after publishing: this screen follows through the file it already reads
       const cfg = { tickets: S.info.tickets, rewards: S.info.rewards, breaks: S.info.breaks, rounds: S.info.rounds || 1, callMode: S.info.callMode === "host" ? "host" : "auto", startMode: S.info.startMode === "manual" ? "manual" : "auto", keepCalling: S.info.afterPrizes === "keep" };
-      S.st = S.cf ? ZG.resolveControl(ZG.cfgOf(S.cf, ZG.hostGameOf(cfg, S.info.startRound)), S.cf.messages) : null; // host mode: the numbers come when the Host presses
+      S.st = S.cf ? ZG.resolveControl(ZG.cfgOf(S.cf, ZG.hostGameOf(cfg, S.info.startRound)), S.cf.messages) : null; // host mode: the numbers come when the Co-organizer presses
       S.cfg = cfg;
       const stride = S.info.callSeconds / 3;
       let budget = 60;
@@ -82,9 +82,9 @@
     if (allDone) { const lastIdx = Math.max(0, ...(S.results || []).filter((r) => (r.round || 1) === (S.round || 1) && Number.isInteger(r.idx)).map((r) => r.idx + 2)); if (lastIdx > 0 && lastIdx < log.length) log = log.slice(0, lastIdx); }
     if (S.dns) return ($app.innerHTML = `<div class="top"><div class="brand">Corporate Tambola</div></div><div class="big"><h1>This game did not start</h1><p>This game did not start. Your details have been auto-deleted.</p></div><div class="foot">${esc(location.host)}/z?e=${esc(EID)}</div>`); // nobody paid; the time and 20 hours went by
     if (S.cancelled) return ($app.innerHTML = `<div class="top"><div class="brand">Corporate Tambola</div></div><div class="big"><h1>This game was cancelled</h1><p>This game was cancelled by the organizer.</p></div><div class="foot">${esc(location.host)}/z?e=${esc(EID)}</div>`);
-    if (S.locked) return ($app.innerHTML = `<div class="top"><div class="brand">Corporate Tambola</div></div><div class="big"><h1>Waiting for the Organizer or Host</h1><p>Waiting for the Organizer or Host to start the game.</p></div><div class="foot">${esc(location.host)}/z?e=${esc(EID)}</div>`);
+    if (S.locked) return ($app.innerHTML = `<div class="top"><div class="brand">Corporate Tambola</div></div><div class="big"><h1>Waiting for the Organizer or Co-organizer</h1><p>Waiting for the Organizer or Co-organizer to start the game.</p></div><div class="foot">${esc(location.host)}/z?e=${esc(EID)}</div>`);
     const paused = S.st && S.now !== null && S.st.intervals.some((i) => S.now >= i.start && S.now < i.end);
-    // host mode: the Host has not pressed for the next number yet (or the last press has reached the screen): nothing counts down
+    // host mode: the Co-organizer has not pressed for the next number yet (or the last press has reached the screen): nothing counts down
     const hostWait = cfg.callMode === "host" && !paused && S.now !== null && (!S.st || !S.st.nextRounds.length || (S.st.nextRounds[S.st.nextRounds.length - 1] <= S.now && log.length >= S.st.nextRounds.length - 90 * (S.round - 1)));
     const lost = (S.now === null ? Date.now() - S.t0 : Date.now() - (S.nowAt || Date.now())) > 15000; // no answer from the public clock for 15 seconds: the numbers on this screen may be late
     const lostBar = lost ? `<div class="lostbar" role="alert">Connection lost. The numbers on this screen may be late. Reconnecting…</div>` : "";
@@ -93,10 +93,10 @@
     const head = `${lostBar}${annBar}<div class="top"><div class="brand">${bLogo ? `<img class="blogo" alt="" src="${esc(bLogo)}">` : ""}${esc(bd && bd.name ? bd.name : "Corporate Tambola")}</div><div class="meta" id="calledmeta">${cfg.rounds > 1 ? "Round " + S.round + " of " + cfg.rounds + " · " : ""}${esc(ZG.calledLine(log.length))}</div></div>`;
     const storyState = S.cancelled ? "cancelled" : allDone ? "endedPrizes" : (log.length >= 90 && (S.round || 1) >= (cfg.rounds || 1)) ? "endedAll" : paused ? "paused" : cfg.startMode === "manual" && (!S.st || S.st.goRound == null) ? (S.now !== null && S.now >= info.startRound ? "waitStart" : "waiting") : log.length ? "running" : (secsToStart !== null && secsToStart > 0 && secsToStart <= 300 ? "countdown" : "waiting");
     const pzS = S.st && S.now !== null ? S.st.intervals.find((x) => S.now >= x.start && S.now < x.end) : null, pmS = pzS && S.cf ? (S.cf.messages || []).find((m) => m.action === "pause" && m.atBeaconRound === pzS.start) : null;
-    const st0 = ZG.story({ state: storyState, role: "screen", called: log.length, manual: cfg.startMode === "manual", time: ZG.dayTimeIst((1692803367 + (info.startRound - 1) * 3) * 1000), countdown: ZG.mmss(secsToStart || 0), by: pmS && S.cf.by && S.cf.by[pmS.seq - 1] === "Host" ? "a Host" : "the Organizer" });
+    const st0 = ZG.story({ state: storyState, role: "screen", called: log.length, manual: cfg.startMode === "manual", time: ZG.dayTimeIst((1692803367 + (info.startRound - 1) * 3) * 1000), countdown: ZG.mmss(secsToStart || 0), by: pmS && S.cf.by && S.cf.by[pmS.seq - 1] === "Host" ? "a Co-organizer" : "the Organizer" });
     const storyBar = `<div class="storybar" id="storyline" data-state="${storyState}"><b>${esc(st0.say)}</b> <span>${esc(st0.doNow)}</span></div>`;
     const wins = (S.results || []).filter((r) => r.round === S.round || r.round === undefined).map((r) => `<span><b>${esc(ORD(r.ordinal || 1))} ${esc(NAMES[r.pattern] || r.pattern)}</b> · ${r.count} winner${r.count === 1 ? "" : "s"}</span>`).join("");
-    if (!log.length && cfg.startMode === "manual" && S.now !== null) { // a game that begins when the Host or Organizer presses Start
+    if (!log.length && cfg.startMode === "manual" && S.now !== null) { // a game that begins when the Co-organizer or Organizer presses Start
       const goR = S.st ? S.st.goRound : null, el = (Date.now() - (S.nowAt || Date.now())) / 1000, toR = (r) => (r - S.now) * 3 - el, joinL = `<p>Open the link on your phone and get your ticket: <b>${esc(location.host)}/z?e=${esc(EID)}</b></p>`;
       if (goR !== null && S.now < goR) return ($app.innerHTML = `${head}${storyBar}<div class="big"><h1>The game is starting</h1><p>The first number is coming.</p><div class="cd">${mmss(toR(goR))}</div>${joinL}</div><div class="foot">Join: ${esc(location.host)}/z?e=${esc(EID)}</div>`);
       if (goR === null && S.now < info.startRound) { const when = new Date((1692803367 + (info.startRound - 1) * 3) * 1000).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }); return ($app.innerHTML = `${head}${storyBar}<div class="big"><p>The game starts at ${esc(when)}, in</p><div class="cd">${hms(toR(info.startRound))}</div><p>The host or organizer presses Start at that time.</p>${joinL}</div><div class="foot">Join: ${esc(location.host)}/z?e=${esc(EID)}</div>`); }
@@ -112,7 +112,7 @@
     const ps = ZG.prizeStatus && S.cfg ? ZG.prizeStatus(S.cfg, S.results || [], S.round || 1) : [];
     const prizes = ps.length ? `<div class="ps" aria-label="Prizes"><h2>Prizes</h2><ul>${ps.map((p) => p.claimed ? `<li class="done"><s>${esc(p.name)}</s> <small>claimed</small></li>` : `<li>${esc(p.name)}${p.text ? ": <b>" + esc(p.text) + "</b>" : ""}</li>`).join("")}</ul></div>` : "";
     const hm = (ms) => new Date(ms).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-    const pz = S.st && S.now !== null ? S.st.intervals.find((x) => S.now >= x.start && S.now < x.end) : null, pm = pz && S.cf ? (S.cf.messages || []).find((m) => m.action === "pause" && m.atBeaconRound === pz.start) : null, pby = pm && S.cf.by && S.cf.by[pm.seq - 1] === "Host" ? "a Host" : "the Organizer";
+    const pz = S.st && S.now !== null ? S.st.intervals.find((x) => S.now >= x.start && S.now < x.end) : null, pm = pz && S.cf ? (S.cf.messages || []).find((m) => m.action === "pause" && m.atBeaconRound === pz.start) : null, pby = pm && S.cf.by && S.cf.by[pm.seq - 1] === "Host" ? "a Co-organizer" : "the Organizer";
     const over90 = log.length >= 90 && (S.round || 1) >= ((S.cfg && S.cfg.rounds) || 1);
     const banner = allDone ? `<div class="big" style="margin-bottom:1vh"><h1>Game over</h1><p>All prizes were awarded after ${log.length} numbers. Thank you for playing.</p></div>` : over90 ? `<div class="big" style="margin-bottom:1vh"><h1>Game over</h1><p>All 90 numbers were called. Thank you for playing.</p></div>` : paused ? `<div class="big" id="pausebanner" style="margin-bottom:1vh"><h1>PAUSED</h1><p>${pz ? "Paused by " + esc(pby) + " at " + esc(hm(ZG.roundTimeMs(pz.start))) + ". The numbers start again at about " + esc(hm(ZG.roundTimeMs(pz.end))) + ", or sooner when they press Resume." : "The organizer has paused the game. It will resume shortly."}</p></div>` : "";
     // between two numbers (software-called games): a big countdown 9, 8, 7 ... 1; silent

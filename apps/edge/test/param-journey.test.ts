@@ -35,7 +35,7 @@ describe("the first game of a new Organizer", () => {
     const info = await j(await call("GET", `/api/z/${id}/info`)); expect(info.name).toBe("Annual Day");
     const c = await checkout(signed.token, { eid: id, email }); expect(c.status).toBe(200); capture(c.body, "pay_first");
     const v = await j(await verify(c.body, "pay_first")); expect(v.ok).toBe(true);
-    const invoice = await (await call("GET", v.invoiceUrl)).text(); expect(invoice).toContain("IT Services by Rajat Agarwal"); expect(invoice).toContain("2,999");
+    const invoice = await (await call("GET", v.invoiceUrl)).text(); expect(invoice).toContain("IT Services by Rajat Agarwal"); expect(invoice).toContain("2,872");
     // 4. guests join from their phones
     for (let i = 1; i <= 6; i++) expect((await join(id, i, { name: "Guest " + i }, T + MIN)).status).toBe(200);
     const pids = q("SELECT pid FROM seat ORDER BY seq").map((r) => r.pid as string);

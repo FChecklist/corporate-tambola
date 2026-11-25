@@ -31,14 +31,14 @@ function page(search = "?flow=new&e=EABCDEF", extra: (w: any) => void = () => {}
 const wait = (ms = 60) => new Promise((r) => setTimeout(r, ms));
 const reset = (i: any = {}, a: Record<string, any> = {}) => { calls.length = 0; info = { unpaid: false, startMs: START, rewards: [{ pattern: "full", ordinal: 1, text: "Gift voucher" }, { pattern: "top", ordinal: 1, text: "Smartphone" }], ...i }; answers = a; };
 
-test("Ready check: link shared (a tick), payment, prizes chosen; optional Hosts and Rehearsal done; ready when the three are true", async () => {
+test("Ready check: link shared (a tick), payment, prizes chosen; optional Co-organizers and Rehearsal done; ready when the three are true", async () => {
   reset({ unpaid: true });
   const win = page(); await wait();
   const d = win.document;
   expect([...d.querySelectorAll("#zf-ready li")].map((n: any) => n.dataset.ready)).toEqual(["link", "pay", "prizes", "reh"]);
   expect(d.querySelector('[data-ready="pay"]').className).toBe("");           // unpaid: not done
   expect(d.querySelector('[data-ready="prizes"]').className).toBe("done");    // every prize has words
-  expect(d.querySelector('[data-ready="hosts"]')).toBe(null);               // no Hosts row (owner rule D)
+  expect(d.querySelector('[data-ready="hosts"]')).toBe(null);               // no Co-organizers row (owner rule D)
   const box = d.getElementById("zf-shared"); box.checked = true; box.dispatchEvent(new win.Event("change"));
   expect(d.querySelector('[data-ready="link"]').className).toBe("done");
   expect(d.getElementById("zf-ready").className).toContain("todo");           // payment is still pending
@@ -56,7 +56,7 @@ test("Publish warning: a game that starts within 30 minutes says so, with the mi
   expect(F.startWarning(now - 60000, now)).toContain("has passed");
   const win = page("?flow=new");
   const s = win.ZFLOW.state; s.done[1] = s.done[2] = s.done[3] = s.done[4] = true; s.open = 5; s.eid = "E1"; s.when = { ms: Date.now() + 10 * 60000, zone: "Asia/Kolkata" }; win.ZFLOW.draw();
-  expect(win.document.getElementById("zf-startwarn").textContent).toContain("Your participants need time to join");
+  expect(win.document.getElementById("zf-startwarn").textContent).toContain("Your players need time to join");
   s.when = { ms: Date.now() + 5 * 3600000, zone: "Asia/Kolkata" }; win.ZFLOW.draw();
   expect(win.document.getElementById("zf-startwarn")).toBe(null);
 });
@@ -77,7 +77,7 @@ test("Prizes: won and left, the winner's ticket number and only the details that
   expect(calls.find((c) => c.method === "POST")).toEqual({ url: "/api/z/EABCDEF/prizegiven", method: "POST", body: { round: 1, pattern: "full", ordinal: 1, seat: 42, given: true } });
 });
 
-test("the pretend Host / Co-host sign-in is gone (owner rule D): ?team=1&demo=roles shows no sign-in and no Co-host page", async () => {
+test("the pretend Co-organizer / Co-host sign-in is gone (owner rule D): ?team=1&demo=roles shows no sign-in and no Co-host page", async () => {
   reset({}, { "/prizes": { prizes: [{ round: 1, pattern: "full", ordinal: 1, seat: 42, name: "Asha" }] } });
   const win = page("?flow=new&e=EABCDEF&team=1&demo=roles"); await wait();
   expect(win.document.getElementById("zf-signin")).toBe(null); expect(win.document.getElementById("zf-demo")).toBe(null);
@@ -144,7 +144,7 @@ test("Rehearsal states: running has Open and Close; done has See what happened",
   expect(calls.find((c) => c.method === "POST").url).toBe("/api/z/EABCDEF-R2/rehearsalclose");
 });
 
-test("Completed: Make a copy makes a new draft with this game's prizes and opens step 1; Delete all participant data asks twice", async () => {
+test("Completed: Make a copy makes a new draft with this game's prizes and opens step 1; Delete all player data asks twice", async () => {
   reset({ startMs: Date.now() - 5 * 3600000, gameMinutes: 30, name: "Diwali party", cap: 100, tickets: 1, callSeconds: 12 });
   const win = page(); await wait();
   const d = win.document;

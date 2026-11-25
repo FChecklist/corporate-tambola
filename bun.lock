@@ -13,11 +13,11 @@
     },
     "apps/edge": {
       "name": "@tambola/edge",
-      "version": "1.12.0",
+      "version": "1.12.1",
     },
     "apps/server": {
       "name": "@tambola/server",
-      "version": "1.12.0",
+      "version": "1.12.1",
       "dependencies": {
         "@tambola/billing": "workspace:*",
         "@tambola/engine": "workspace:*",
@@ -26,7 +26,7 @@
     },
     "packages/beacon": {
       "name": "@tambola/beacon",
-      "version": "1.12.0",
+      "version": "1.12.1",
       "dependencies": {
         "@noble/curves": "^1.6.0",
         "@noble/hashes": "^1.5.0",
@@ -34,32 +34,32 @@
     },
     "packages/billing": {
       "name": "@tambola/billing",
-      "version": "1.12.0",
+      "version": "1.12.1",
     },
     "packages/engine": {
       "name": "@tambola/engine",
-      "version": "1.12.0",
+      "version": "1.12.1",
       "dependencies": {
         "@tambola/shared": "workspace:*",
       },
     },
     "packages/shared": {
       "name": "@tambola/shared",
-      "version": "1.12.0",
+      "version": "1.12.1",
       "dependencies": {
         "libphonenumber-js": "^1.11.4",
       },
     },
     "tools/seed": {
       "name": "@tambola/seed",
-      "version": "1.12.0",
+      "version": "1.12.1",
       "dependencies": {
         "@tambola/shared": "workspace:*",
       },
     },
     "tools/sim": {
       "name": "@tambola/sim",
-      "version": "1.12.0",
+      "version": "1.12.1",
       "dependencies": {
         "@tambola/billing": "workspace:*",
         "@tambola/shared": "workspace:*",

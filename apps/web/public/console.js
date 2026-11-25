@@ -1,6 +1,6 @@
-/* Corporate Tambola – Organizer / Host / Team Lead console. Vanilla JS, no build. Uses window.TB from common.js.
+/* Corporate Tambola – Organizer / Co-organizer / Team Lead console. Vanilla JS, no build. Uses window.TB from common.js.
  *   /console   -> Organizer (needs organizer login)
- *   /r/CODE    -> Host or Team Lead personal link (opens on that person's own phone)
+ *   /r/CODE    -> Co-organizer or Team Lead personal link (opens on that person's own phone)
  */
 (function () {
   "use strict";
@@ -12,7 +12,7 @@
     toast(esc(msg || "Copied"));
   }
   const root = $("app");
-  const NOTICE = "Tickets, phones, claims and the activity log are deleted 24 hours after the engagement ends. Names, numbers and departments are kept for up to 365 days so you can reuse them, then deleted. You can delete them any time from the Dashboard.";
+  const NOTICE = "Tickets, phones, claims and the activity log are deleted 24 hours after the game ends. Names, numbers and departments are kept for up to 365 days so you can reuse them, then deleted. You can delete them any time from the Dashboard.";
 
   // ---------------------------------------------------------------- constants
   const PN = { early5: "Early Five", top: "Top Line", mid: "Middle Line", bot: "Bottom Line", corners: "Four Corners", star: "Star", full: "Full House" };
@@ -71,11 +71,11 @@
   const wa = (e164, msg) => `https://wa.me/${digits(e164)}?text=${encodeURIComponent(msg)}`;
   const firstName = (n) => (n || "").trim().split(/\s+/)[0] || "there";
   const tzName = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Kolkata"; } catch { return "Asia/Kolkata"; } };
-  const roleName = (r) => (r === "host" ? "Host" : r === "team_lead" ? "Team Lead" : "Participant");
+  const roleName = (r) => (r === "host" ? "Co-organizer" : r === "team_lead" ? "Team Lead" : "Player");
   const fmtTs = (t) => new Date(t).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", second: "2-digit" });
   function statusPill() {
     const s = eng().status;
-    return { open: pill("ok", "Open for entry"), started: pill("warn", "Engagement in progress · entry closed"), ended: pill("bad", "Engagement ended"), purged: pill("", "Tickets and claims deleted") }[s] || "";
+    return { open: pill("ok", "Open for entry"), started: pill("warn", "Game in progress · entry closed"), ended: pill("bad", "Game ended"), purged: pill("", "Tickets and claims deleted") }[s] || "";
   }
   function pStatus(p) {
     return p.status === "joined" ? pill("ok", "Joined") : p.status === "pass_sent" ? pill("info", "Pass sent") : pill("", "Not joined");
@@ -156,8 +156,8 @@
     let d;
     try { d = await api("GET", `${E()}/console`); }
     catch (e) {
-      if (first) { fatal(e.message || "Cannot open this engagement.", isOrg() ? `<a class="btn" href="/console">Back to the Dashboard</a>` : ""); return; }
-      if (!isOrg() && (e.status === 403 || e.status === 401)) { clearInterval(S.poll); if (S.ws) S.ws.close(); fatal("This link is no longer active on this phone.", `<p class="lead">The engagement may have ended and its personal data deleted, or your access was changed by the Organizer.</p>`); }
+      if (first) { fatal(e.message || "Cannot open this game.", isOrg() ? `<a class="btn" href="/console">Back to the Dashboard</a>` : ""); return; }
+      if (!isOrg() && (e.status === 403 || e.status === 401)) { clearInterval(S.poll); if (S.ws) S.ws.close(); fatal("This link is no longer active on this phone.", `<p class="lead">The game may have ended and its personal data deleted, or your access was changed by the Organizer.</p>`); }
       return;
     }
     const prev = S.data && S.data.engagement.status;
@@ -178,10 +178,10 @@
   function paintHead() {
     const d = S.data, e = d.engagement, c = d.counts;
     const title = isOrg() && S.me && S.me.engagements.length > 1
-      ? `<select class="inp hsel" data-c="switch" aria-label="Choose engagement">${S.me.engagements.map((x) => `<option value="${esc(x.code)}" ${x.code === S.code ? "selected" : ""}>${esc(x.name)}</option>`).join("")}</select>`
+      ? `<select class="inp hsel" data-c="switch" aria-label="Choose game">${S.me.engagements.map((x) => `<option value="${esc(x.code)}" ${x.code === S.code ? "selected" : ""}>${esc(x.name)}</option>`).join("")}</select>`
       : esc(e.name);
     const when = e.startsAt ? `${e.status === "open" ? "Starts" : "Starts at"} ${TB.fmtDT(e.startsAt)} (your time)` : "No start time set";
-    patch($("head"), `<div class="chead"><div><div class="eyebrow">${isOrg() ? "Organizer console" : "Host console · " + esc(S.hostName)} · ${esc(e.orgName)}</div>
+    patch($("head"), `<div class="chead"><div><div class="eyebrow">${isOrg() ? "Organizer console" : "Co-organizer console · " + esc(S.hostName)} · ${esc(e.orgName)}</div>
       <h1>${title}</h1><div class="stats" style="margin-top:4px"><span>${ic("clock")} ${esc(when)}</span><span>Code <b>${esc(e.code)}</b></span></div></div>
       <div style="text-align:right"><div>${statusPill()}</div><div class="stats" style="justify-content:flex-end;margin-top:6px"><span>Joined <b>${c.joined}</b></span><span>Places used <b>${c.used}</b> / <b>${c.limit}</b></span><span>Waiting <b>${c.waiting}</b></span>${c.conflicts ? `<span class="pill warn">${c.conflicts} phone alert${c.conflicts > 1 ? "s" : ""}</span>` : ""}</div></div></div>`);
   }
@@ -249,25 +249,25 @@
     const e = eng(), ro = e.status !== "open" || !isOrg();
     const ms = e.startsAt || Date.now() + 864e5, d = new Date(ms);
     const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    const modeHint = { ai: `The system calls a random number every ${sx().callSeconds} seconds.`, manual: "A Host presses “Draw” (the system picks the number at random) and announces it. At least 5 seconds apart.", both: `The system calls a number every ${sx().callSeconds} seconds. Hosts can also speak to everyone at any time.` }[e.callMode];
+    const modeHint = { ai: `The system calls a random number every ${sx().callSeconds} seconds.`, manual: "A Co-organizer presses “Draw” (the system picks the number at random) and announces it. At least 5 seconds apart.", both: `The system calls a number every ${sx().callSeconds} seconds. Co-organizers can also speak to everyone at any time.` }[e.callMode];
     const raise = isOrg() && e.status === "open" ? `<button class="btn sm line" data-a="raise">${ic("users")} Raise limit</button>` : "";
-    return [["setup", `<div class="panel"><div class="phead"><div class="step">1</div><div><h2>Set up the engagement</h2><p>Pick an option in each box. Changes save by themselves until the engagement starts.</p>
-      ${e.status !== "open" ? `<p class="lockmsg">Everything is locked because the engagement has started.</p>` : ""}</div></div>
+    return [["setup", `<div class="panel"><div class="phead"><div class="step">1</div><div><h2>Set up the game</h2><p>Pick an option in each box. Changes save by themselves until the game starts.</p>
+      ${e.status !== "open" ? `<p class="lockmsg">Everything is locked because the game has started.</p>` : ""}</div></div>
       <div class="grid">
-        <div><label class="lb" for="gName">Engagement name</label><input class="inp" id="gName" maxlength="60" value="${esc(e.name)}" ${ro ? "disabled" : ""} data-c="name" data-i="name"></div>
+        <div><label class="lb" for="gName">Game name</label><input class="inp" id="gName" maxlength="60" value="${esc(e.name)}" ${ro ? "disabled" : ""} data-c="name" data-i="name"></div>
         <div><label class="lb" for="gDate">Date</label><input class="inp" type="date" id="gDate" value="${iso}" ${ro ? "disabled" : ""} data-c="date"></div>
-        <div><label class="lb" for="gTime">Start time</label><select class="inp" id="gTime" ${ro ? "disabled" : ""} data-c="time">${timeOptions(ms)}</select><p class="hint">Your own time zone (${esc(tzName())}). Participants see it in their own time.</p></div>
-        <div><label class="lb" for="gCty">Most participants’ country</label><select class="inp" id="gCty" ${ro ? "disabled" : ""} data-c="country">${TB.countryOpts(e.defaultCountry)}</select><p class="hint">Numbers without a country code are read as this country.</p></div>
-        <div><label class="lb">Participant limit (everyone, including family)</label><div class="row"><b class="mono" style="font-size:20px">${Number(e.limit).toLocaleString()}</b>${raise}</div><p class="hint">Equals the pack you bought. Entry stops at this number.</p></div>
+        <div><label class="lb" for="gTime">Start time</label><select class="inp" id="gTime" ${ro ? "disabled" : ""} data-c="time">${timeOptions(ms)}</select><p class="hint">Your own time zone (${esc(tzName())}). Players see it in their own time.</p></div>
+        <div><label class="lb" for="gCty">Most players’ country</label><select class="inp" id="gCty" ${ro ? "disabled" : ""} data-c="country">${TB.countryOpts(e.defaultCountry)}</select><p class="hint">Numbers without a country code are read as this country.</p></div>
+        <div><label class="lb">Player limit (everyone, including family)</label><div class="row"><b class="mono" style="font-size:20px">${Number(e.limit).toLocaleString()}</b>${raise}</div><p class="hint">Equals the pack you bought. Entry stops at this number.</p></div>
       </div>
       <div class="grid">
-        <div><label class="lb">Family members each participant can bring</label>${chips("set", "familyLimit", "n", [[0, "None"], [1, "1"], [2, "2"], [3, "3"], [4, "4"]], e.familyLimit, ro)}<p class="hint">Family members get their own pass. They cannot invite anyone.</p></div>
+        <div><label class="lb">Family members each player can bring</label>${chips("set", "familyLimit", "n", [[0, "None"], [1, "1"], [2, "2"], [3, "3"], [4, "4"]], e.familyLimit, ro)}<p class="hint">Family members get their own pass. They cannot invite anyone.</p></div>
         <div><label class="lb">Can family members win rewards?</label>${chips("set", "familyCanWin", "b", [[true, "Yes"], [false, "No, they play for fun"]], e.familyCanWin, ro)}</div>
-        <div><label class="lb">Can participants invite colleagues?</label>${chips("set", "participantInvites", "n", [[0, "No"], [1, "1 each"], [2, "2 each"], [3, "3 each"]], e.participantInvites, ro)}<p class="hint">Their invites go to the waiting room for you to approve.</p></div>
+        <div><label class="lb">Can players invite colleagues?</label>${chips("set", "participantInvites", "n", [[0, "No"], [1, "1 each"], [2, "2 each"], [3, "3 each"]], e.participantInvites, ro)}<p class="hint">Their invites go to the waiting room for you to approve.</p></div>
       </div>
       <div class="grid">
-        <div><label class="lb">Tickets per participant</label>${chips("set", "ticketMode", "s", [["single", "1 ticket"], ["double", "2 tickets"]], e.ticketMode, ro)}<p class="hint">${e.ticketMode === "double" ? "Each participant gets two tickets. A “Full Two-Ticket House” reward becomes possible." : "Each participant gets one ticket."}</p></div>
-        <div><label class="lb">How numbers are called</label>${chips("set", "callMode", "s", [["ai", "Automatic"], ["manual", "Host voice"], ["both", "Automatic + host speaks"]], e.callMode, ro)}<p class="hint">${esc(modeHint)}</p></div>
+        <div><label class="lb">Tickets per player</label>${chips("set", "ticketMode", "s", [["single", "1 ticket"], ["double", "2 tickets"]], e.ticketMode, ro)}<p class="hint">${e.ticketMode === "double" ? "Each player gets two tickets. A “Full Two-Ticket House” reward becomes possible." : "Each player gets one ticket."}</p></div>
+        <div><label class="lb">How numbers are called</label>${chips("set", "callMode", "s", [["ai", "Automatic"], ["manual", "Co-organizer voice"], ["both", "Automatic + host speaks"]], e.callMode, ro)}<p class="hint">${esc(modeHint)}</p></div>
         <div><label class="lb">Voice</label><div class="pill wine" style="margin-top:4px">${ic("mic")} Indian English, female, slow and clear</div></div>
       </div></div>`]];
   }
@@ -293,7 +293,7 @@
   }
   let nameT = null;
   function saveName(el) {
-    const v = el.value.trim() || "My engagement";
+    const v = el.value.trim() || "My game";
     if (v !== eng().name) saveSettings({ name: v });
   }
   function saveStart(dateStr, mins) {
@@ -311,8 +311,8 @@
   }
   function raiseHtml() {
     const e = eng(), bigger = TB.PACKS.filter((p) => p[0] > e.pack), base = TB.price(e.pack, e.currency).total;
-    return `<h2>Raise the participant limit</h2><p class="muted small">You have a pack of ${e.pack}. Choose a bigger pack and pay only the difference.</p>
-      <div class="pm">${bigger.map((p) => { const diff = TB.price(p[0], e.currency).total - base; return `<button type="button" class="${S.raisePick === p[0] ? "on" : ""}" data-a="raisePick" data-v="${p[0]}"><span>${p[0].toLocaleString()} participants<small>You pay the difference</small></span><span style="margin-left:auto"><b>${esc(TB.money(diff, e.currency))}</b></span></button>`; }).join("")}</div>
+    return `<h2>Raise the player limit</h2><p class="muted small">You have a pack of ${e.pack}. Choose a bigger pack and pay only the difference.</p>
+      <div class="pm">${bigger.map((p) => { const diff = TB.price(p[0], e.currency).total - base; return `<button type="button" class="${S.raisePick === p[0] ? "on" : ""}" data-a="raisePick" data-v="${p[0]}"><span>${p[0].toLocaleString()} players<small>You pay the difference</small></span><span style="margin-left:auto"><b>${esc(TB.money(diff, e.currency))}</b></span></button>`; }).join("")}</div>
       <button class="btn gold block" style="margin-top:12px" data-a="raiseGo">Pay the difference and raise the limit</button>
       <button class="btn line block" style="margin-top:8px" data-a="closeSheet">Cancel</button>`;
   }
@@ -351,7 +351,7 @@
         ${n ? `<div class="lines">${texts}</div>` : ""}</div>`;
     }).join("");
     return [["rewards", `<div class="panel"><div class="phead"><div class="step">2</div><div><h2>Rewards</h2><p>Choose which rewards you give and write what each one is. “Full House” can have several houses: 1st, 2nd, 3rd and so on. You hand rewards over yourself.</p>
-      ${e.status !== "open" ? `<p class="lockmsg">Locked because the engagement has started.</p>` : ""}</div></div>
+      ${e.status !== "open" ? `<p class="lockmsg">Locked because the game has started.</p>` : ""}</div></div>
       ${rows}
       ${RW.warn ? `<div class="err">${ic("alert")}<span>${esc(RW.warn)}</span></div>` : ""}
       <p class="hint">Two or more valid claims on the same number share that reward. Count 0 means the reward is not offered. At most 30 reward lines.</p></div>`]];
@@ -392,7 +392,7 @@
   function surpriseSecs() {
     const e = eng(), ro = e.status !== "open" || !isOrg(), c = sx(), on = sxOn(c), open = S.sxOpen === null || S.sxOpen === undefined ? on : S.sxOpen;
     const head = `<div class="panel"><div class="phead"><div class="step">3</div><div><h2>Rounds and surprise moments <span class="pill info" style="vertical-align:middle;margin-left:6px">Optional</span></h2><p>Make the event bigger: several short rounds, lucky draws and scratch cards, with a Still to win counter that keeps everyone watching. All of this is optional.</p>
-      ${e.status !== "open" ? `<p class="lockmsg">Locked because the engagement has started.</p>` : ""}</div></div>`;
+      ${e.status !== "open" ? `<p class="lockmsg">Locked because the game has started.</p>` : ""}</div></div>`;
     if (!open) return [["surprise", `${head}<button class="btn sm line" data-a="sxToggle">${ic("sliders")} Show the options</button></div>`]];
     const cp = (act, k, t, opts, v, dis) => chips(act, k, t, opts, v, dis === undefined ? ro : dis);
     const sel = (k, label, from, to, none) => `<select class="inp" id="sx_${k}" ${ro ? "disabled" : ""} data-c="sxSel" data-k="${k}" data-t="n" aria-label="${esc(label)}">${none ? `<option value="0" ${c[k] === 0 ? "selected" : ""}>None</option>` : ""}${Array.from({ length: to - from + 1 }, (_, i) => from + i).map((n) => `<option value="${n}" ${c[k] === n ? "selected" : ""}>${n}</option>`).join("")}</select>`;
@@ -401,7 +401,7 @@
     const g1 = `<div class="grid">
       <div><label class="lb">Tambola rounds in this event</label>${cp("sx", "rounds", "n", [[1, "1"], [2, "2"], [3, "3"], [4, "4"], [5, "5"]], c.rounds)}<p class="hint">Each round uses all the rewards you set up in step 2.</p></div>
       <div><label class="lb">Calling speed</label>${cp("sx", "callSeconds", "n", [[6, "Fast · 6 s"], [9, "Normal · 9 s"], [12, "Relaxed · 12 s"], [15, "Slow · 15 s"]], c.callSeconds)}</div>
-      <div><label class="lb">Mark tickets automatically</label>${yn("autoMark", "Yes", "No, participants tap")}<p class="hint">${c.autoMark ? "Each called number is marked on the participant’s ticket for them. Claims are still checked." : "Participants tap each called number themselves. Rounds take a little longer."}</p></div></div>`;
+      <div><label class="lb">Mark tickets automatically</label>${yn("autoMark", "Yes", "No, players tap")}<p class="hint">${c.autoMark ? "Each called number is marked on the player’s ticket for them. Claims are still checked." : "Players tap each called number themselves. Rounds take a little longer."}</p></div></div>`;
     const g2 = `<div class="grid">
       <div><label class="lb" for="sx_luckyDraws">Lucky draws in the event</label>${sel("luckyDraws", "Lucky draws in the event", 1, 10, true)}</div>
       ${c.luckyDraws > 0 ? `<div><label class="lb">Winners in each draw</label>${cp("sx", "luckyWinners", "n", [[1, "1"], [3, "3"], [5, "5"], [10, "10"]], c.luckyWinners)}</div>
@@ -411,7 +411,7 @@
       ${c.scratchCards > 0 ? `<div><label class="lb">Winning cards in each scratch round</label>${cp("sx", "scratchWinning", "n", [[5, "5"], [10, "10"], [20, "20"], [50, "50"]], c.scratchWinning)}<p class="hint">A fixed number, never a percentage.</p></div>
       <div><label class="lb">Scratch card reward</label>${cp("sx", "scratchPrize", "s", [["gift", "Gift"], ["booster", "Booster"], ["mix", "Half and half"]], c.scratchPrize, ro || noBoost)}</div>` : ""}</div>`;
     const g3 = `<div class="grid">
-      ${hasMoments ? `<div><label class="lb">When surprise moments happen</label>${cp("sx", "momentsMode", "s", [["auto", "Automatically at natural pauses"], ["manual", "When I press the button"]], c.momentsMode)}<p class="hint">${c.momentsMode === "manual" ? "You or a Host start each lucky draw or scratch card from the Live step." : "The system starts them at natural pauses, spread across the event."}</p></div>
+      ${hasMoments ? `<div><label class="lb">When surprise moments happen</label>${cp("sx", "momentsMode", "s", [["auto", "Automatically at natural pauses"], ["manual", "When I press the button"]], c.momentsMode)}<p class="hint">${c.momentsMode === "manual" ? "You or a Co-organizer start each lucky draw or scratch card from the Live step." : "The system starts them at natural pauses, spread across the event."}</p></div>
       <div><label class="lb">Allow boosters</label>${yn("boostersAllowed", "Yes", "No, keep it pure")}<p class="hint">${noBoost ? "Boosters are off. Every lucky draw and scratch card reward is set to Gift." : "A Joker marks a missed number, an Extra ticket gives a second ticket next round, a Lucky draw pass gives one more entry in the next draw."}</p></div>` : ""}
       <div><label class="lb">Show winners’ first name, department and last 4 digits</label>${yn("revealNames", "Yes", "No, ticket id only")}<p class="hint">Only people who joined after you switch this on will be shown by name; everyone else stays a ticket id.</p></div></div>`;
     const p = planOf(), R = c.rounds, P = S.data.rewards.length;
@@ -429,7 +429,7 @@
       <div class="row" style="margin-top:12px"><button class="btn sm ghost" data-a="sxToggle">Hide the options</button>${on ? "" : `<span class="tiny muted">Nothing here is switched on. The event runs exactly as before.</span>`}</div></div>`;
     const screen = S.data.screenUrl ? `<div class="row" style="align-items:flex-start;gap:18px"><div style="flex:1;min-width:240px"><div class="row"><a class="btn sm" target="_blank" rel="noopener" href="${esc(S.data.screenUrl)}">Open the big screen</a><button class="btn sm line" data-a="copyLink" data-v="${esc(S.data.screenUrl)}">${ic("copy")} Copy link</button></div>
       <p class="hint">Show it on a projector. It shows only the last number, the counters and results by ticket id, never names or numbers${c.revealNames ? " (names are on, so winners appear by first name, department and last 4 digits)" : " (unless you switched names on)"}.</p></div><div class="qrbox" id="qrScreen"></div></div>` : "";
-    const see = `<div class="panel"><div class="phead"><div class="step">${ic("users")}</div><div><h2>What participants see</h2><p>A Still to win counter on every phone and on the big screen.</p></div></div>
+    const see = `<div class="panel"><div class="phead"><div class="step">${ic("users")}</div><div><h2>What players see</h2><p>A Still to win counter on every phone and on the big screen.</p></div></div>
       <div class="note info" style="font-weight:600;font-size:14px">Still to win: ${esc(stillText(c, p))}</div>${screen ? `<div style="margin-top:14px">${screen}</div>` : ""}</div>`;
     return [["surprise", main], ["sxsee", see]];
   }
@@ -461,18 +461,18 @@
       return `<div class="bbx"><div class="r1">
         <div><label class="lb">After call</label><div class="stp"><button type="button" ${ro ? "disabled" : ""} data-a="bkAfter" data-n="${i}" data-v="-1">−</button><b>${b.after}</b><button type="button" ${ro ? "disabled" : ""} data-a="bkAfter" data-n="${i}" data-v="1">+</button></div></div>
         <div style="flex:1 1 300px"><label class="lb">Type</label>${chips("bkKind", i, "s", BREAK_KINDS, b.kind, ro)}</div></div>
-        <div class="r1" style="margin-top:6px"><div class="tt"><label class="lb">Title participants see</label><input class="inp" maxlength="60" value="${esc(b.title)}" ${ro ? "disabled" : ""} data-i="bkTitle" data-c="bkTitle" data-n="${i}"></div>
+        <div class="r1" style="margin-top:6px"><div class="tt"><label class="lb">Title players see</label><input class="inp" maxlength="60" value="${esc(b.title)}" ${ro ? "disabled" : ""} data-i="bkTitle" data-c="bkTitle" data-n="${i}"></div>
         <div><label class="lb">Length</label><select class="inp" ${ro ? "disabled" : ""} data-c="bkSecs" data-n="${i}">${(SECS.includes(b.seconds) ? SECS : [...SECS, b.seconds].sort((a, c) => a - c)).map((s) => `<option value="${s}" ${s === b.seconds ? "selected" : ""}>${s >= 60 && s % 60 === 0 ? s / 60 + " min" : s + " sec"}</option>`).join("")}</select></div>
         <button class="btn sm danger" ${ro ? "disabled" : ""} data-a="bkDel" data-n="${i}" aria-label="Remove brand break">${ic("trash")}</button></div>
         ${needsLink ? `<div style="margin-top:6px"><label class="lb">${b.kind === "youtube" ? "YouTube link" : "Company video link"} (starts with https://)</label><input class="inp" inputmode="url" value="${esc(b.mediaUrl)}" ${ro ? "disabled" : ""} placeholder="https://" data-i="bkUrl" data-c="bkUrl" data-n="${i}">
-        ${!b.mediaUrl ? `<p class="hint bad">Add the link before the engagement starts.</p>` : ""}</div>` : `<p class="hint">${b.kind === "speech" ? "A Host speaks live during the break." : "Your slides are shown by the Host during the break."}</p>`}</div>`;
+        ${!b.mediaUrl ? `<p class="hint bad">Add the link before the game starts.</p>` : ""}</div>` : `<p class="hint">${b.kind === "speech" ? "A Co-organizer speaks live during the break." : "Your slides are shown by the Co-organizer during the break."}</p>`}</div>`;
     }).join("");
-    return [["breaks", `<div class="panel"><div class="phead"><div class="step">4</div><div><h2>Brand breaks</h2><p>Up to 3 moments where the engagement pauses for everyone and your company is on screen. Breaks never start while a claim is being checked.</p>
-      ${e.status !== "open" ? `<p class="lockmsg">Locked because the engagement has started.</p>` : ""}</div></div>
+    return [["breaks", `<div class="panel"><div class="phead"><div class="step">4</div><div><h2>Brand breaks</h2><p>Up to 3 moments where the game pauses for everyone and your company is on screen. Breaks never start while a claim is being checked.</p>
+      ${e.status !== "open" ? `<p class="lockmsg">Locked because the game has started.</p>` : ""}</div></div>
       ${rows || `<p class="muted small">No brand breaks. Add one if you want to show a company video, YouTube video, slides or a speech.</p>`}
       ${BK.warn ? `<div class="err">${ic("alert")}<span>${esc(BK.warn)}</span></div>` : ""}
       <button class="btn sm line" ${ro || BK.list.length >= 3 ? "disabled" : ""} data-a="bkAdd">+ Add a brand break</button>
-      <div class="note info">${ic("info")}<span><b>Company video:</b> each participant’s phone downloads a low-quality copy before the engagement starts. Recommended: MP4 360p H.264, under 50 MB.</span></div>
+      <div class="note info">${ic("info")}<span><b>Company video:</b> each player’s phone downloads a low-quality copy before the game starts. Recommended: MP4 360p H.264, under 50 MB.</span></div>
       <div class="note info">${ic("info")}<span><b>YouTube videos</b> stream when the break starts; they cannot be downloaded ahead.</span></div></div>`]];
   }
 
@@ -480,7 +480,7 @@
   const matchF = (p, f) => f === "all" || (f === "host" && p.role === "host") || (f === "team_lead" && p.role === "team_lead") || (f === "family" && p.kind === "family") || (f === "colleague" && p.kind === "colleague") || (f === "notjoined" && p.status !== "joined");
   function waMsg(p) {
     const e = eng(), f = firstName(p.name), link = p.roleLink || p.passLink || "";
-    if (p.role === "host") return `Hi ${f}, you are a Host for ${e.name}. Open your link to help admit participants: ${link}\nPlease don't forward this link.`;
+    if (p.role === "host") return `Hi ${f}, you are a Co-organizer for ${e.name}. Open your link to help admit participants: ${link}\nPlease don't forward this link.`;
     if (p.role === "team_lead") return `Hi ${f}, you are a Team Lead for ${e.name}. Open your link to bring in up to ${p.cap} colleagues: ${link}\nPlease don't forward this link. It works on one phone only.`;
     return `Hi ${f}, here is your personal pass for ${e.name}: ${link}\nIt works on one phone only, so please don't forward it.`;
   }
@@ -504,7 +504,7 @@
   }
   function famSec() {
     const e = eng();
-    return `<div class="panel"><div class="phead"><div class="step">${ic("users")}</div><div><h2>Family members</h2><p>How many family members each participant can bring. Family members cannot invite anyone.</p></div></div>
+    return `<div class="panel"><div class="phead"><div class="step">${ic("users")}</div><div><h2>Family members</h2><p>How many family members each player can bring. Family members cannot invite anyone.</p></div></div>
       ${chips("set", "familyLimit", "n", [[0, "None"], [1, "1"], [2, "2"], [3, "3"], [4, "4"]], e.familyLimit, e.status !== "open")}</div>`;
   }
   function peopleSecs() {
@@ -518,19 +518,19 @@
       const roleCell = fam ? `<span class="pill">Family</span>` : `<div class="rolecell">${pill(hostRow ? "wine" : p.role === "team_lead" ? "info" : "", roleName(p.role))}${p.kind === "colleague" ? `<span class="pill">Colleague</span>` : ""}</div>`;
       const bring = p.role === "team_lead"
         ? `<select class="mini-sel" ${canEdit ? "" : "disabled"} data-c="cap" data-id="${p.id}" aria-label="Colleague limit">${CAPS.map((c) => `<option value="${c}" ${c === p.cap ? "selected" : ""}>${c} colleagues</option>`).join("")}</select><div class="sub">${p.colleaguesUsed} used</div>`
-        : hostRow ? `<span class="sub">Helps run the engagement</span>` : fam ? `<span class="sub">Cannot invite</span>` : `<span class="sub">${e.familyLimit ? "Family: up to " + e.familyLimit : "No family"}</span>`;
-      let link = `<span class="sub">Uses the engagement link</span>`;
+        : hostRow ? `<span class="sub">Helps run the game</span>` : fam ? `<span class="sub">Cannot invite</span>` : `<span class="sub">${e.familyLimit ? "Family: up to " + e.familyLimit : "No family"}</span>`;
+      let link = `<span class="sub">Uses the game link</span>`;
       if (p.roleLink) link = `<div class="lnk"><button class="btn sm line" data-a="copyLink" data-v="${esc(p.roleLink)}" aria-label="Copy link">${ic("copy")}</button><a class="btn sm line" target="_blank" rel="noopener" href="${wa(p.e164, waMsg(p))}">WhatsApp</a></div>`;
       else if (p.passLink && p.status !== "joined") link = `<div class="lnk"><button class="btn sm line" data-a="copyLink" data-v="${esc(p.passLink)}">${ic("copy")} Pass link</button></div>`;
       const sel = `<input type="checkbox" aria-label="Select ${esc(p.name)}" ${S.sel.has(p.id) ? "checked" : ""} ${open && !(!isOrg() && hostRow) ? "" : "disabled"} data-c="sel" data-id="${p.id}">`;
       return `<tr><td class="sel">${sel}</td><td><div class="nm">${esc(p.name || "(no name)")}</div><div class="sub">${howJoined(p)}</div></td><td class="mono" data-l="Mobile">${esc(p.number)}</td><td data-l="Role">${roleCell}</td><td data-l="Can bring in">${bring}</td><td data-l="Status">${pStatus(p)}${p.blocked ? " " + pill("bad", "Blocked") : ""}</td><td data-l="Link">${link}</td></tr>`;
     }).join("");
     const n = S.sel.size;
-    const bulk = open ? `<div class="bulk"><b>${n} selected</b><span class="lbx">Make Team Lead:</span>${CAPS.map((c) => `<button class="btn sm chipb" ${n ? "" : "disabled"} data-a="bulkTL" data-v="${c}">${c}</button>`).join("")}${isOrg() ? `<button class="btn sm line" ${n ? "" : "disabled"} data-a="bulkRole" data-v="host">Make Host</button>` : ""}<button class="btn sm line" ${n ? "" : "disabled"} data-a="bulkRole" data-v="participant">Make regular participant</button><button class="btn sm danger" ${n ? "" : "disabled"} data-a="bulkRemove">Remove</button><span class="sp"></span><button class="btn sm ghost" data-a="selAll">${n && n === list.length ? "Clear" : "Select all shown"}</button></div>` : "";
+    const bulk = open ? `<div class="bulk"><b>${n} selected</b><span class="lbx">Make Team Lead:</span>${CAPS.map((c) => `<button class="btn sm chipb" ${n ? "" : "disabled"} data-a="bulkTL" data-v="${c}">${c}</button>`).join("")}${isOrg() ? `<button class="btn sm line" ${n ? "" : "disabled"} data-a="bulkRole" data-v="host">Make Co-organizer</button>` : ""}<button class="btn sm line" ${n ? "" : "disabled"} data-a="bulkRole" data-v="participant">Make regular player</button><button class="btn sm danger" ${n ? "" : "disabled"} data-a="bulkRemove">Remove</button><span class="sp"></span><button class="btn sm ghost" data-a="selAll">${n && n === list.length ? "Clear" : "Select all shown"}</button></div>` : "";
     const secs = [];
     if (isOrg() && open && all.length <= 5 && D.dash && D.dash.last) secs.push(["pbanner", reuseBanner()]);
     if (isOrg()) secs.push(["padd", addSec()]); else secs.push(["pfam", famSec()]);
-    secs.push(["pbar", `<div class="panel" style="margin-bottom:0;border-bottom-left-radius:0;border-bottom-right-radius:0;border-bottom:0;box-shadow:none"><div class="phead" style="margin-bottom:2px"><div><h2>Everyone on the list</h2><p>Tick people, then choose what to do with them. Team Leads get their own link to bring in their team. Hosts help you run the engagement.</p></div></div>
+    secs.push(["pbar", `<div class="panel" style="margin-bottom:0;border-bottom-left-radius:0;border-bottom-right-radius:0;border-bottom:0;box-shadow:none"><div class="phead" style="margin-bottom:2px"><div><h2>Everyone on the list</h2><p>Tick people, then choose what to do with them. Team Leads get their own link to bring in their team. Co-organizers help you run the game.</p></div></div>
       <div class="row"><input class="inp" style="max-width:260px" placeholder="Search name or number" value="${esc(S.q)}" data-i="q" aria-label="Search"></div>
       <div style="margin-top:10px">${chips("filter", "f", "s", FILTERS.map(([v, l]) => [v, l + (v === "all" ? "" : " (" + all.filter((p) => matchF(p, v)).length + ")")]), S.filter, false)}</div></div>`]);
     secs.push(["plist", `<div class="panel" style="border-top:0;border-top-left-radius:0;border-top-right-radius:0;padding-top:0;margin-top:0">
@@ -558,15 +558,15 @@
     const ids = [...S.sel], byId = new Map(S.data.participants.map((p) => [p.id, p]));
     const ok = ids.filter((id) => { const p = byId.get(id); return p && p.kind !== "family" && !(!isOrg() && (p.role === "host" || role === "host")); });
     const skipped = ids.length - ok.length;
-    if (!ok.length) return toast("Family members and Hosts cannot be changed here.");
+    if (!ok.length) return toast("Family members and Co-organizers cannot be changed here.");
     const r = await run(api("POST", `${E()}/people/bulk`, { ids: ok, action: "role", role, cap }));
-    if (r) { S.sel.clear(); toast(`Done${skipped ? ` · ${skipped} skipped (family members or Hosts)` : ""}`); }
+    if (r) { S.sel.clear(); toast(`Done${skipped ? ` · ${skipped} skipped (family members or Co-organizers)` : ""}`); }
     await loadConsole();
   }
   function bulkRemove() {
     const ids = [...S.sel], byId = new Map(S.data.participants.map((p) => [p.id, p]));
     const ok = ids.filter((id) => { const p = byId.get(id); return p && !(!isOrg() && p.role === "host"); });
-    if (!ok.length) return toast("Hosts cannot be removed by a Host.");
+    if (!ok.length) return toast("Co-organizers cannot be removed by a Co-organizer.");
     confirmSheet({ title: `Remove ${TB.plural(ok.length, "person", "people")}?`, body: "Anyone they invited (colleagues and family) is removed too, and their places are freed. This cannot be undone.", yes: "Remove", danger: true,
       onYes: async () => { closeSheet(); const r = await run(api("POST", `${E()}/people/bulk`, { ids: ok, action: "remove" })); if (r) { S.sel.clear(); toast(`Removed ${TB.plural(r.removed ?? ok.length, "person", "people")}`); } await loadConsole(); } });
   }
@@ -580,15 +580,15 @@
   function shareSecs() {
     const e = eng(), closed = e.status !== "open" && e.status !== "starting";
     const roles = S.data.participants.filter((p) => p.roleLink && (p.role === "host" || p.role === "team_lead"));
-    const rl = roles.length ? `<div class="tscroll"><table class="t"><thead><tr><th>Name</th><th>Role</th><th>Personal link</th><th></th></tr></thead><tbody>${roles.map((p) => `<tr><td>${esc(p.name || "(no name)")}</td><td>${pill(p.role === "host" ? "wine" : "info", roleName(p.role))}</td><td class="mono" style="font-size:12px;word-break:break-all">${esc(p.roleLink)}</td><td><div class="lnk"><button class="btn sm line" data-a="copyLink" data-v="${esc(p.roleLink)}">${ic("copy")}</button><a class="btn sm line" target="_blank" rel="noopener" href="${wa(p.e164, waMsg(p))}">WhatsApp</a></div></td></tr>`).join("")}</tbody></table></div>` : `<p class="muted small">No Hosts or Team Leads yet. Make them in the People step; their personal links appear here.</p>`;
-    return [["share", `<div class="panel"><div class="phead"><div class="step">6</div><div><h2>Share the engagement link</h2><p>One link for everyone on your list. If a number is not on your list, that person goes to the waiting room.</p>
+    const rl = roles.length ? `<div class="tscroll"><table class="t"><thead><tr><th>Name</th><th>Role</th><th>Personal link</th><th></th></tr></thead><tbody>${roles.map((p) => `<tr><td>${esc(p.name || "(no name)")}</td><td>${pill(p.role === "host" ? "wine" : "info", roleName(p.role))}</td><td class="mono" style="font-size:12px;word-break:break-all">${esc(p.roleLink)}</td><td><div class="lnk"><button class="btn sm line" data-a="copyLink" data-v="${esc(p.roleLink)}">${ic("copy")}</button><a class="btn sm line" target="_blank" rel="noopener" href="${wa(p.e164, waMsg(p))}">WhatsApp</a></div></td></tr>`).join("")}</tbody></table></div>` : `<p class="muted small">No Co-organizers or Team Leads yet. Make them in the People step; their personal links appear here.</p>`;
+    return [["share", `<div class="panel"><div class="phead"><div class="step">6</div><div><h2>Share the game link</h2><p>One link for everyone on your list. If a number is not on your list, that person goes to the waiting room.</p>
       ${closed ? `<p class="lockmsg">Entry is closed. The link now shows “Entry is closed”.</p>` : ""}
 </div></div>
       <div class="row" style="align-items:flex-start;gap:18px"><div style="flex:1;min-width:260px"><div class="linkbox">${esc(e.link)}</div>
       <div class="row" style="margin-top:10px"><button class="btn sm" data-a="copyLink" data-v="${esc(e.link)}">${ic("copy")} Copy link</button><a class="btn sm line" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(curMsg())}">Share on WhatsApp</a><button class="btn sm line" data-a="copyMsg">${ic("mail")} Copy email message</button></div>
       <label class="lb" for="gmsg">Message that goes with the link</label><textarea class="inp" id="gmsg" style="min-height:100px;font-family:var(--sans)" ${isOrg() ? "" : "readonly"} data-i="msg">${esc(curMsg())}</textarea></div>
       <div><label class="lb" style="margin-top:0">Show on a screen or print for the office</label><div class="qrbox" id="qr"></div></div></div></div>
-      <div class="panel"><div class="phead"><div class="step">${ic("link")}</div><div><h2>Host and Team Lead links</h2><p>Each link belongs to one person and works on one phone only. Send each link to one person only.</p></div></div>${rl}</div>`]];
+      <div class="panel"><div class="phead"><div class="step">${ic("link")}</div><div><h2>Co-organizer and Team Lead links</h2><p>Each link belongs to one person and works on one phone only. Send each link to one person only.</p></div></div>${rl}</div>`]];
   }
   async function drawQR(id, link) {
     const el = $(id); if (!el || !link) return;
@@ -605,33 +605,33 @@
     const alerts = d.conflicts.map((c) => `<div class="alert">${ic("phone")}<span style="flex:1;min-width:220px"><b>Second phone tried to join as ${esc(c.name)}</b> <span class="mono">(${esc(c.number)})</span>. The first phone is still in. If ${esc(firstName(c.name))} changed phones, let the new one in.</span><button class="btn sm line" data-a="resolve" data-id="${c.id}" data-v="kept">Keep first phone</button><button class="btn sm" data-a="resolve" data-id="${c.id}" data-v="moved">Let new phone in</button></div>`).join("");
     const list = w.length ? `<div class="row" style="margin:6px 0"><label class="cb" style="margin:0"><input type="checkbox" ${!open ? "disabled" : ""} ${S.wsel.size && S.wsel.size === w.length ? "checked" : ""} data-c="wselAll"> Select all</label><span class="sp"></span>
       <button class="btn sm" ${!open || !S.wsel.size ? "disabled" : ""} data-a="admit" data-v="sel">Admit selected</button><button class="btn sm line" ${!open ? "disabled" : ""} data-a="admit" data-v="all">Admit everyone</button><button class="btn sm danger" ${!open || !S.wsel.size ? "disabled" : ""} data-a="decline">Decline selected</button></div>
-      <div style="border:1px solid var(--line);border-radius:12px;padding:0 10px">${w.map((x) => `<div class="qitem"><input type="checkbox" ${!open ? "disabled" : ""} ${S.wsel.has(x.id) ? "checked" : ""} aria-label="Select ${esc(x.name)}" data-c="wsel" data-id="${x.id}"><div style="flex:1"><b>${esc(x.name)}</b> <span class="mono small muted">${esc(x.number)}</span>${x.info ? ` <span class="tiny muted">· ${esc(x.info)}</span>` : ""}<div class="tiny muted">${x.invitedBy ? "Invited by " + esc(x.invitedBy) : "Used the engagement link. Not on your list."} · ${TB.ago(x.at)}</div></div></div>`).join("")}</div>`
+      <div style="border:1px solid var(--line);border-radius:12px;padding:0 10px">${w.map((x) => `<div class="qitem"><input type="checkbox" ${!open ? "disabled" : ""} ${S.wsel.has(x.id) ? "checked" : ""} aria-label="Select ${esc(x.name)}" data-c="wsel" data-id="${x.id}"><div style="flex:1"><b>${esc(x.name)}</b> <span class="mono small muted">${esc(x.number)}</span>${x.info ? ` <span class="tiny muted">· ${esc(x.info)}</span>` : ""}<div class="tiny muted">${x.invitedBy ? "Invited by " + esc(x.invitedBy) : "Used the game link. Not on your list."} · ${TB.ago(x.at)}</div></div></div>`).join("")}</div>`
       : `<p class="muted small">Nobody is waiting.</p>`;
-    return [["wait", `<div class="panel"><div class="phead"><div class="step">${isOrg() ? 7 : 1}</div><div><h2>Waiting room</h2><p>People who used the engagement link but are not on your list, and invites from participants. Admit them or decline them.</p>
+    return [["wait", `<div class="panel"><div class="phead"><div class="step">${isOrg() ? 7 : 1}</div><div><h2>Waiting room</h2><p>People who used the game link but are not on your list, and invites from players. Admit them or decline them.</p>
       ${!open ? `<p class="lockmsg">Entry is closed. Anyone still waiting was told “Entry is closed”.</p>` : ""}</div></div>${alerts}${list}</div>`]];
   }
 
   // ---------------------------------------------------------------- 7. start
   function startSecs() {
     const e = eng(), c = S.data.counts;
-    if (!isOrg()) return [["start", `<div class="panel"><div class="phead"><div class="step">${ic("lock")}</div><div><h2>Starting</h2><p>Only the Organizer can start or end the engagement.</p></div></div></div>`]];
+    if (!isOrg()) return [["start", `<div class="panel"><div class="phead"><div class="step">${ic("lock")}</div><div><h2>Starting</h2><p>Only the Organizer can start or end the game.</p></div></div></div>`]];
     const missing = BK.list.filter((b) => (b.kind === "file" || b.kind === "youtube") && !b.mediaUrl).length;
     const ready = S.ck1 && S.ck2;
-    return [["start", `<div class="panel" style="border-color:var(--gold)"><div class="phead"><div class="step">8</div><div><h2>Start the engagement</h2><p>Every setting locks at once. People can still join for 60 seconds while their phones get ready, then entry closes and the first number is called.</p></div></div>
-      <div class="sum"><div class="kv"><span>Engagement</span><b>${esc(e.name)}</b></div>
+    return [["start", `<div class="panel" style="border-color:var(--gold)"><div class="phead"><div class="step">8</div><div><h2>Start the game</h2><p>Every setting locks at once. People can still join for 60 seconds while their phones get ready, then entry closes and the first number is called.</p></div></div>
+      <div class="sum"><div class="kv"><span>Game</span><b>${esc(e.name)}</b></div>
       <div class="kv"><span>Planned start</span><b>${e.startsAt ? esc(TB.fmtDT(e.startsAt)) : "Not set"}</b></div>
       <div class="kv"><span>Joined</span><b>${c.joined} of ${c.used} places</b></div>
       <div class="kv"><span>Waiting room</span><b>${c.waiting ? pill("warn", c.waiting + " still waiting") : "Nobody waiting"}</b></div>
       <div class="kv"><span>Rewards</span><b>${S.data.rewards.length}</b></div>
       <div class="kv"><span>Brand breaks</span><b>${S.data.breaks.length}${missing ? " · " + missing + " without a link" : ""}</b></div>
       ${sxOn(sx()) ? `<div class="kv"><span>Rounds and surprises</span><b>${esc(nOf(sx().rounds, "round", "rounds") + (sx().luckyDraws ? " · " + nOf(sx().luckyDraws, "lucky draw", "lucky draws") : "") + (sx().scratchCards ? " · " + nOf(sx().scratchCards, "scratch card", "scratch cards") : ""))}</b></div>` : ""}
-      <div class="kv"><span>Tickets</span><b>${e.ticketMode === "double" ? "2 per participant" : "1 per participant"}</b></div>
-      <div class="kv"><span>Numbers called by</span><b>${{ ai: "Automatic", manual: "Host voice", both: "AI voice + host speaks" }[e.callMode]}</b></div></div>
+      <div class="kv"><span>Tickets</span><b>${e.ticketMode === "double" ? "2 per player" : "1 per player"}</b></div>
+      <div class="kv"><span>Numbers called by</span><b>${{ ai: "Automatic", manual: "Co-organizer voice", both: "AI voice + host speaks" }[e.callMode]}</b></div></div>
       ${c.joined === 0 ? `<div class="note warn">${ic("alert")}<span>Nobody has joined yet.</span></div>` : ""}
       ${missing ? `<div class="note warn">${ic("alert")}<span>A brand break has no video link. Add it in step 4 or remove the break.</span></div>` : ""}
       <label class="cb"><input type="checkbox" ${S.ck1 ? "checked" : ""} data-c="ck1"> <span>Everyone I want has been admitted.${c.waiting ? ` <span class="pill warn">${c.waiting} still waiting</span>` : ""}</span></label>
       <label class="cb"><input type="checkbox" ${S.ck2 ? "checked" : ""} data-c="ck2"> I understand that after the first 60 seconds nobody can join, and nothing can be changed.</label>
-      <button class="btn gold" ${ready ? "" : "disabled"} data-a="start">${ic("play")} Start engagement now</button> <span class="tiny muted">${c.joined} of ${c.used} have joined so far.</span></div>`]];
+      <button class="btn gold" ${ready ? "" : "disabled"} data-a="start">${ic("play")} Start game now</button> <span class="tiny muted">${c.joined} of ${c.used} have joined so far.</span></div>`]];
   }
 
   // ---------------------------------------------------------------- 8. live
@@ -640,16 +640,16 @@
     let cls = "", ball, eb, ln, sub = "";
     const pz = l.paused;
     if (e.status === "starting") { cls = "pz"; ball = ic("clock"); eb = "Starting · phones are getting ready"; ln = "The first number is called when the countdown ends."; sub = `People can still join. First number in <b data-liveat="${l.liveAt}">${Math.max(0, Math.ceil((l.liveAt - Date.now()) / 1000))}</b> seconds`; }
-    else if (e.status === "ended") { cls = "pz"; ball = ic("flag"); eb = "Engagement ended"; ln = "Thank you for running it."; sub = isOrg() ? "Open the Report step for winners and the full list." : "The Organizer can see the report."; }
+    else if (e.status === "ended") { cls = "pz"; ball = ic("flag"); eb = "Game ended"; ln = "Thank you for running it."; sub = isOrg() ? "Open the Report step for winners and the full list." : "The Organizer can see the report."; }
     else if (pz && pz.type === "claim") { cls = "pz"; ball = ic("pause"); eb = "Paused · checking a claim"; ln = "The system is checking. Everyone waits."; }
-    else if (pz && pz.type === "result") { cls = "okc"; ball = ic("trophy"); eb = "Result shown to everyone"; ln = "The engagement continues in a few seconds."; }
+    else if (pz && pz.type === "result") { cls = "okc"; ball = ic("trophy"); eb = "Result shown to everyone"; ln = "The game continues in a few seconds."; }
     else if (pz && pz.type === "break") { cls = "brk"; ball = ic("play"); eb = "Brand break"; ln = esc(pz.title || ""); sub = "Playing on every phone."; }
-    else if (pz && pz.type === "emergency") { cls = "pz"; ball = ic("pause"); eb = "Emergency pause"; ln = esc(pz.reason || ""); sub = "Shown to every participant."; }
+    else if (pz && pz.type === "emergency") { cls = "pz"; ball = ic("pause"); eb = "Emergency pause"; ln = esc(pz.reason || ""); sub = "Shown to every player."; }
     else {
       ball = l.current ? `<span class="big-num" style="font-size:40px">${l.current}</span>` : "<small>Ready</small>";
       eb = `Now calling · ${l.called} of 90 called`;
-      ln = l.current ? "The current number is shown to every participant." : e.callMode === "manual" ? "Press “Draw next number” to call the first number." : "The first number is on its way…";
-      sub = e.callMode === "manual" ? "Host voice: a Host draws each number." : l.nextAt ? `Next number in <b data-nextat="${l.nextAt}">${Math.max(0, Math.ceil((l.nextAt - Date.now()) / 1000))}</b> seconds` : "";
+      ln = l.current ? "The current number is shown to every player." : e.callMode === "manual" ? "Press “Draw next number” to call the first number." : "The first number is on its way…";
+      sub = e.callMode === "manual" ? "Co-organizer voice: a Co-organizer draws each number." : l.nextAt ? `Next number in <b data-nextat="${l.nextAt}">${Math.max(0, Math.ceil((l.nextAt - Date.now()) / 1000))}</b> seconds` : "";
     }
     return `<div class="caller ${cls}"><div class="bigball">${ball}</div><div><div class="eyebrow">${eb}</div><div class="ln">${ln}</div><div class="sub">${sub}</div></div></div>`;
   }
@@ -678,7 +678,7 @@
   function liveSecs() {
     const e = eng(), l = S.data.live, d = S.data, running = e.status === "started", pz = l.paused;
     const draw = running && e.callMode === "manual" ? `<button class="btn" data-a="draw" ${pz ? "disabled" : ""}>${ic("draw")} Draw next number</button>` : running ? `<span class="tiny muted" style="flex:1 1 200px">The system calls a number every ${sx().callSeconds} seconds. It can only be paused in an emergency.</span>` : "";
-    const talk = running && e.callMode !== "ai" ? `<button class="talk ${S.talk ? "on" : ""}" style="flex:1 1 100%" data-a="talk">${ic("mic")}<span><b>${S.talk ? "Speaking · tap to stop" : "Speak to everyone"}</b><br><span class="tiny muted">Everyone with sound on hears you</span></span>${S.talk ? `<span class="sp-chip" style="margin-left:auto">Host speaking</span>` : ""}</button>` : "";
+    const talk = running && e.callMode !== "ai" ? `<button class="talk ${S.talk ? "on" : ""}" style="flex:1 1 100%" data-a="talk">${ic("mic")}<span><b>${S.talk ? "Speaking · tap to stop" : "Speak to everyone"}</b><br><span class="tiny muted">Everyone with sound on hears you</span></span>${S.talk ? `<span class="sp-chip" style="margin-left:auto">Co-organizer speaking</span>` : ""}</button>` : "";
     let pauseBtn = "";
     if (running) {
       if (pz && pz.type === "emergency") pauseBtn = `<button class="btn sm" data-a="resume">${ic("play")} Resume</button>`;
@@ -694,10 +694,10 @@
     const nv = d.notValid.length ? d.notValid.slice(-8).reverse().map((n) => `<div>${esc(n.ticketId)} – ${esc(PN[n.pattern] || n.pattern)} <span class="tiny muted">${esc(n.why)}</span></div>`).join("") : `<span class="muted">None so far.</span>`;
     const log = d.log.filter((x) => !/^Call \d+:/.test(x.msg)).slice(0, 40).map((x) => `<li><time>${fmtTs(x.t)}</time><span>${esc(x.msg)}</span></li>`).join("");
     const brk = d.breaks.length ? d.breaks.map((b) => `<div>${b.done ? "✓" : "•"} After call ${b.after}: ${esc(b.title)} (${b.seconds} sec) ${b.done ? pill("ok", "Done") : ""}</div>`).join("") : `<span class="muted">None set up.</span>`;
-    return [["live", `<div class="panel" style="border-color:var(--gold)"><div class="phead"><div class="step">${ic("play")}</div><div><h2>Live</h2><p>${isOrg() ? "You are running the engagement. Hosts see the same screen." : "You are helping run the engagement."} Numbers are always drawn at random by the system. Nobody sees a list of past numbers.</p></div></div>
+    return [["live", `<div class="panel" style="border-color:var(--gold)"><div class="phead"><div class="step">${ic("play")}</div><div><h2>Live</h2><p>${isOrg() ? "You are running the game. Co-organizers see the same screen." : "You are helping run the game."} Numbers are always drawn at random by the system. Nobody sees a list of past numbers.</p></div></div>
       ${stillStrip()}<div class="livebox"><div><div>${callerHtml()}</div>
         <div class="row" style="margin-top:10px">${draw}${talk}</div>
-        ${running ? `<div style="margin-top:12px"><label class="lb" style="margin-top:0">Emergency pause: reason</label><div class="row">${why}${pauseBtn}${isOrg() ? `<span class="sp"></span><button class="btn danger" data-a="askEnd">${ic("flag")} End engagement</button>` : ""}</div></div>` : ""}
+        ${running ? `<div style="margin-top:12px"><label class="lb" style="margin-top:0">Emergency pause: reason</label><div class="row">${why}${pauseBtn}${isOrg() ? `<span class="sp"></span><button class="btn danger" data-a="askEnd">${ic("flag")} End game</button>` : ""}</div></div>` : ""}
         <label class="lb">Calls so far</label><div><b class="mono" style="font-size:18px">${l.called}</b> <span class="muted small">of 90</span></div>
         <label class="lb">Brand breaks</label><div class="small">${brk}</div>
         <label class="lb">Activity</label><ul class="log">${log || `<li><span class="muted">Nothing yet.</span></li>`}</ul></div>
@@ -714,7 +714,7 @@
   }
   function reportTSV(r) {
     const e = eng(), L = [], t = (a) => a.map((x) => String(x ?? "").replace(/[\t\r\n]+/g, " ")).join("\t");
-    L.push(t(["Engagement", r.engagement, "Organizer", e.orgName, "Started", r.startedAt ? TB.fmtDT(r.startedAt) : "", "Ended", r.endedAt ? TB.fmtDT(r.endedAt) : ""]), "", "WINNERS");
+    L.push(t(["Game", r.engagement, "Organizer", e.orgName, "Started", r.startedAt ? TB.fmtDT(r.startedAt) : "", "Ended", r.endedAt ? TB.fmtDT(r.endedAt) : ""]), "", "WINNERS");
     L.push(t(["Reward", "Reward text", "Winner", "Ticket ID", "Mobile", "Winners sharing", "Won on number", "Call no.", "Time", "Round"]));
     r.winners.forEach((w) => L.push(t([w.reward, w.rewardText, w.name, w.ticketId, w.e164, w.winners, w.wonOnNumber, w.callNo, fmtTs(w.at), w.round || 1])));
     L.push("", "NOT AWARDED", t(["Reward", "Reward text", "Round"]), ...nameNotAwarded(r).map((x) => t([x.name, x.text, x.round])));
@@ -771,7 +771,7 @@
     if (r.purged) {
       const s = r.summary || {};
       return [["report", `<div class="panel"><div class="phead"><div class="step">${ic("trash")}</div><div><h2>Personal data deleted</h2><p>${esc(NOTICE)}</p></div></div>
-        <div class="grid" style="margin-top:10px"><div class="meter"><span>Participants</span><b>${s.players ?? 0}</b></div><div class="meter"><span>Family members</span><b>${s.family ?? 0}</b></div><div class="meter"><span>Team Leads</span><b>${s.teamLeads ?? 0}</b></div></div></div>`]];
+        <div class="grid" style="margin-top:10px"><div class="meter"><span>Players</span><b>${s.players ?? 0}</b></div><div class="meter"><span>Family members</span><b>${s.family ?? 0}</b></div><div class="meter"><span>Team Leads</span><b>${s.teamLeads ?? 0}</b></div></div></div>`]];
     }
     const del = (r.endedAt || Date.now()) + 864e5;
     const na = nameNotAwarded(r);
@@ -833,7 +833,7 @@
       if (r) S.wsel.clear(); await loadConsole();
     },
     decline: async () => { const n = S.wsel.size; const r = await run(api("POST", `${E()}/waiting/decline`, { ids: [...S.wsel] }), `Declined ${TB.plural(n, "request")}`); if (r) S.wsel.clear(); await loadConsole(); },
-    start: async () => { const r = await run(api("POST", `${E()}/start`, {}), "The engagement has started. Entry is closed."); if (r) { S.ck1 = S.ck2 = false; S.step = "live"; await loadConsole(); gotoStep("live"); } },
+    start: async () => { const r = await run(api("POST", `${E()}/start`, {}), "The game has started. Entry is closed."); if (r) { S.ck1 = S.ck2 = false; S.step = "live"; await loadConsole(); gotoStep("live"); } },
     draw: async () => { await run(api("POST", `${E()}/draw`, {})); await loadConsole(); },
     talk: () => { S.talk = !S.talk; if (S.ws) S.ws.send({ type: "talk", on: S.talk }); paintStage(); },
     why: (el) => { S.pauseWhy = el.dataset.v; paintStage(); },
@@ -851,8 +851,8 @@
       if (!$("endOk").checked) { sheetYes = go; return toast("Tick the box to confirm."); }
       closeSheet(); await run(api("POST", `${E()}/end`, {})); await loadConsole();
     };
-    confirmSheet({ title: "End the engagement now?", body: "Rewards that are still open will not be awarded. The report becomes available. Tickets, phones, claims and the activity log are deleted 24 hours from now; names, numbers and departments are kept for up to 365 days so you can reuse them.", danger: true, yes: "End engagement", no: "Keep going",
-      extra: `<label class="cb"><input type="checkbox" id="endOk"> I want to end the engagement for everyone.</label>`, onYes: go });
+    confirmSheet({ title: "End the game now?", body: "Rewards that are still open will not be awarded. The report becomes available. Tickets, phones, claims and the activity log are deleted 24 hours from now; names, numbers and departments are kept for up to 365 days so you can reuse them.", danger: true, yes: "End game", no: "Keep going",
+      extra: `<label class="cb"><input type="checkbox" id="endOk"> I want to end the game for everyone.</label>`, onYes: go });
   };
   // the sheet button calls sheetYes then clears it; keep it set for the tick-box retry
   A.sheetYes = () => { const f = sheetYes; if (f) f(); };
@@ -971,13 +971,13 @@
       ${q.colleagues ? `<div class="meter"><span>Colleague passes</span><b>${cu} / ${cap}</b><div class="bar"><i style="width:${cap ? Math.min(100, (cu / cap) * 100) : 0}%"></i></div></div>` : ""}
       ${q.family ? `<div class="meter"><span>Family passes</span><b>${fu} / ${fl}</b><div class="bar"><i style="width:${fl ? Math.min(100, (fu / fl) * 100) : 100}%"></i></div></div>` : ""}</div>`;
     const typeChips = q.colleagues && q.family ? chips("tlType", "t", "s", [["colleague", "A colleague"], ["family", "My family member"]], T.type, false) : "";
-    let hint = closed ? `<p class="hint bad">Entry is closed. The engagement has started.</p>` : T.type === "colleague" && cFull ? `<p class="hint bad">You have used all ${cap} colleague passes. Ask the organizer for more.</p>` : T.type === "family" && fFull ? `<p class="hint bad">${fl ? "You have used all " + fl + " family passes." : "This engagement does not allow family members."}</p>` : `<p class="hint">The pass will work only for this number, on one phone.</p>`;
+    let hint = closed ? `<p class="hint bad">Entry is closed. The game has started.</p>` : T.type === "colleague" && cFull ? `<p class="hint bad">You have used all ${cap} colleague passes. Ask the organizer for more.</p>` : T.type === "family" && fFull ? `<p class="hint bad">${fl ? "You have used all " + fl + " family passes." : "This game does not allow family members."}</p>` : `<p class="hint">The pass will work only for this number, on one phone.</p>`;
     const disabled = closed || (T.type === "colleague" ? cFull : fFull);
     const res = T.result ? `<div class="note ok" style="display:block;margin-top:14px"><b>Pass ready for ${esc(T.result.name)}</b><div class="linkbox" style="margin:8px 0">${esc(T.result.link)}</div>
       <div class="row"><button class="btn sm line" data-a="copyLink" data-v="${esc(T.result.link)}">${ic("copy")} Copy link</button></div></div>` : "";
     const rows = m.invitees.map((x) => `<tr><td>${esc(x.name)}</td><td>${x.kind === "family" ? "Family" : "Colleague"}</td><td>${pStatus(x)}</td><td style="white-space:nowrap">${x.link ? `<div class="lnk"><a class="btn sm line" target="_blank" rel="noopener" href="${tlWaLink(x.link, "", "", x.name)}">WhatsApp</a><button class="btn sm line" data-a="copyLink" data-v="${esc(x.link)}">${ic("copy")}</button><button class="btn sm line" ${closed ? "disabled" : ""} data-a="tlReissue" data-id="${x.id}">Re-issue</button><button class="btn sm danger" ${closed ? "disabled" : ""} data-a="tlCancel" data-id="${x.id}">Cancel</button></div>` : `<span class="sub">Joined</span>`}</td></tr>`).join("");
     const secs = [
-      ["tlhead", head + (isTL ? "" : `<div class="note warn">${ic("alert")}<span>You are no longer a Team Lead for this engagement.</span></div>`)],
+      ["tlhead", head + (isTL ? "" : `<div class="note warn">${ic("alert")}<span>You are no longer a Team Lead for this game.</span></div>`)],
       ["tlmeters", `<div class="panel"><div class="phead"><div class="step">1</div><div><h2>Create a pass</h2><p>Create a pass for each person. Each pass works on one phone only, so nobody else can use it.</p></div></div>${meters}</div>`],
     ];
     const form = `<div class="panel" style="margin-top:-6px;padding-top:6px"><label class="lb">Who is this pass for?</label>${typeChips || `<div class="small muted">${q.colleagues ? "A colleague" : "A family member"}</div>`}
@@ -1000,7 +1000,7 @@
   // ================================================================ ROLE LINK (/r/CODE)
   const ROLE_ERR = {
     inuse: ["phone", "This link is already in use on another phone", "Only one phone can use a personal link. The Organizer has been told and can move your access to this phone."],
-    closed: ["lock", "Entry is closed", "The engagement has already started, so nobody new can join. Ask your Organizer."],
+    closed: ["lock", "Entry is closed", "The game has already started, so nobody new can join. Ask your Organizer."],
     badlink: ["alert", "This link does not work", "Check the link your Organizer sent you."],
   };
   function roleScreen(inner) {
@@ -1021,9 +1021,9 @@
   function roleConsent(linkCode, r) {
     const rn = roleName(r.role), en = r.engagement.name;
     roleScreen(`<div class="pcard"><div class="eyebrow">${esc(rn)} link</div><h2>Hi ${esc(firstName(r.name))}, you are a <em>${esc(rn)}</em> for ${esc(en)}</h2>
-      <p class="lead">${r.role === "host" ? "As a Host you help admit participants and run the engagement." : "As a Team Lead you bring in your own team with personal passes."} This link works on this phone only.</p>
+      <p class="lead">${r.role === "host" ? "As a Co-organizer you help admit players and run the game." : "As a Team Lead you bring in your own team with personal passes."} This link works on this phone only.</p>
       ${r.engagement.startsAt ? `<div class="sum"><div class="kv"><span>When</span><b>${esc(TB.fmtDT(r.engagement.startsAt))}</b></div></div>` : ""}
-      <label class="cb"><input type="checkbox" id="roleOk"> <span>I agree that my name and mobile number are used for this engagement. The Organizer may keep them for up to 365 days to reuse them, then they are deleted.</span></label>
+      <label class="cb"><input type="checkbox" id="roleOk"> <span>I agree that my name and mobile number are used for this game. The Organizer may keep them for up to 365 days to reuse them, then they are deleted.</span></label>
       <button class="btn gold block" id="roleGo" disabled>Continue</button></div>`);
     const ok = $("roleOk"), go = $("roleGo");
     ok.onchange = () => (go.disabled = !ok.checked);
@@ -1037,7 +1037,7 @@
     S.code = code;
     if (role === "host") return enterHost(code, name);
     if (role === "team_lead") { T.cc = ""; return enterTeamLead(); }
-    fatal("You are not a Host or Team Lead any more.", `<a class="btn" href="/e/${esc(code)}">Open my ticket</a>`);
+    fatal("You are not a Co-organizer or Team Lead any more.", `<a class="btn" href="/e/${esc(code)}">Open my ticket</a>`);
   }
   async function enterTeamLead() {
     try { const info = await TB.api("GET", `/api/e/${S.code}`); T.cc = info.defaultCountry || "IN"; } catch { T.cc = "IN"; }
@@ -1064,12 +1064,12 @@
   function aiChoices() {
     return `<label class="lb">Valid for</label>${chips("aiPick", "aiDays", "n", [[1, "1 day"], [7, "7 days"], [30, "30 days"]], D.aiDays)}
       <label class="lb">What your AI may do</label>${chips("aiPick", "aiLevel", "s", [["standard", "Standard"], ["read", "Read only"]], D.aiLevel)}
-      <p class="hint">${D.aiLevel === "read" ? "Read only: your AI can look at engagements and reports but cannot change anything." : "Standard: your AI can set up engagements, add people and run the day. Big steps still need your tap."}</p>`;
+      <p class="hint">${D.aiLevel === "read" ? "Read only: your AI can look at games and reports but cannot change anything." : "Standard: your AI can set up games, add people and run the day. Big steps still need your tap."}</p>`;
   }
   function aiCard() {
     const has = !!D.ai, st = aiStatus();
     return `<div class="panel dai" id="aiCard"><div class="row" style="justify-content:space-between;align-items:flex-start"><div><div class="eyebrow">Your AI</div><h2 class="dlh">Let your AI do the work</h2></div>${st.pill}</div>
-      <p class="muted small" style="margin:4px 0 8px">Copy one message into ChatGPT, Gemini, Claude or any AI chat. Your AI then sets up engagements, adds or reuses people, runs the day and tells you the report. No password and no learning our screens. Starting, ending, removing people, deleting details and payments still need your tap.</p>
+      <p class="muted small" style="margin:4px 0 8px">Copy one message into ChatGPT, Gemini, Claude or any AI chat. Your AI then sets up games, adds or reuses people, runs the day and tells you the report. No password and no learning our screens. Starting, ending, removing people, deleting details and payments still need your tap.</p>
       ${D.ai !== undefined ? `<div class="dline" style="font-size:14px">${st.line}</div>` : ""}
       ${has ? `<p class="hint">A new link replaces and cancels the old one.</p>` : ""}
       ${aiChoices()}
@@ -1089,7 +1089,7 @@
       <label class="lb" for="aiMsg">Message for your AI</label><textarea class="inp" id="aiMsg" readonly style="min-height:150px" aria-label="Message for your AI">${esc(AI_PROMPT)}</textarea>
       <button class="btn gold block dbtn" style="margin-top:10px" data-a="aiCopy">${ic("copy")} Copy message</button>
       <p class="hint"><b>Shown only once.</b> We also emailed it to ${esc(r.emailedTo || S.me.email)}.</p>
-      <ul class="facts" style="margin:8px 0 0"><li>Anyone with this message can act for you, so keep it to yourself.</li><li>Mobile numbers are masked for your AI.</li><li>When your AI wants to start or end an engagement, it sends you a confirmation link. Open it and tap Confirm.</li></ul>
+      <ul class="facts" style="margin:8px 0 0"><li>Anyone with this message can act for you, so keep it to yourself.</li><li>Mobile numbers are masked for your AI.</li><li>When your AI wants to start or end a game, it sends you a confirmation link. Open it and tap Confirm.</li></ul>
       <button class="btn line block dbtn" style="margin-top:10px" data-a="closeSheet">Done</button>`);
     const t = $("aiMsg"); if (t) { t.focus(); t.select(); }
   };
@@ -1115,7 +1115,7 @@
   const openList = () => (D.dash ? D.dash.history.filter((x) => x.status === "open") : []);
   const activeList = () => (D.dash ? D.dash.history.filter((x) => x.status === "open" || x.status === "starting" || x.status === "started") : []);
   const libCount = () => (D.dash ? D.dash.library.count : 0);
-  // sources that can be reused: past engagements with kept people, plus the saved list
+  // sources that can be reused: past games with kept people, plus the saved list
   const rvSources = (exclude) => pastList().filter((x) => x.code !== exclude && x.peopleCount > 0);
   const canReuseAny = () => rvSources("").length > 0 || libCount() > 0;
   const lastLine = (x) => `Held on <b>${esc(dDate(x.heldAt))}</b> · Total <b>${x.total}</b> · Participated <b>${x.participated}</b>`;
@@ -1126,7 +1126,7 @@
       <div class="stats" style="margin:8px 0">Total <b>${x.total}</b> · Participated <b>${x.participated}</b></div>
       <div style="margin-bottom:10px">${kept ? pill("info", "Details kept until " + dDate(x.peopleExpiresAt) + " · " + people(x.peopleCount)) : pill("", "Details deleted")}</div>
       <div class="row dbtns"><button class="btn sm dbtn" ${kept ? "" : "disabled"} data-a="dReuse" data-v="${esc(x.code)}">Reuse the data</button><button class="btn sm line dbtn" ${kept ? "" : "disabled"} data-a="dEraseEng" data-v="${esc(x.code)}">${ic("trash")} Delete kept details</button></div>
-      ${kept ? "" : `<p class="hint">Nothing is kept from this engagement, so there is nothing to reuse.</p>`}</div>`;
+      ${kept ? "" : `<p class="hint">Nothing is kept from this game, so there is nothing to reuse.</p>`}</div>`;
   }
   function activeCard(x) {
     const when = x.heldAt ? new Date(x.heldAt) : null;
@@ -1144,18 +1144,18 @@
     if (!d) { root.innerHTML = `${topbar(consoleLinks(true))}<div class="wrap" style="max-width:760px"><div class="panel center"><p class="muted">We could not load your Dashboard.</p><button class="btn" data-a="dReload">Try again</button></div></div>`; return; }
     const last = d.last, active = activeList(), past = pastList();
     const lastCard = last
-      ? `<div class="panel dlast"><div class="eyebrow">Last engagement</div><h2 class="dlh">${esc(last.name)}</h2><div class="dline">${lastLine(last)}</div>
-         <div class="row dbtns" style="margin-top:12px"><button class="btn gold dbtn" ${canReuseAny() ? "" : "disabled"} data-a="dReuse" data-v="">Reuse the data</button><button class="btn line dbtn" data-a="dHist">History of all past engagements</button></div>
-         ${canReuseAny() ? "" : `<p class="hint">The details of this engagement have been deleted, so there is nothing to reuse yet.</p>`}</div>`
-      : `<div class="panel dlast"><div class="eyebrow">Last engagement</div><h2 class="dlh">Nothing here yet</h2><p class="muted small" style="margin:6px 0 0">Your past engagements will appear here. After your first engagement you can reuse everyone with one tap.</p></div>`;
+      ? `<div class="panel dlast"><div class="eyebrow">Last game</div><h2 class="dlh">${esc(last.name)}</h2><div class="dline">${lastLine(last)}</div>
+         <div class="row dbtns" style="margin-top:12px"><button class="btn gold dbtn" ${canReuseAny() ? "" : "disabled"} data-a="dReuse" data-v="">Reuse the data</button><button class="btn line dbtn" data-a="dHist">History of all past games</button></div>
+         ${canReuseAny() ? "" : `<p class="hint">The details of this game have been deleted, so there is nothing to reuse yet.</p>`}</div>`
+      : `<div class="panel dlast"><div class="eyebrow">Last game</div><h2 class="dlh">Nothing here yet</h2><p class="muted small" style="margin:6px 0 0">Your past games will appear here. After your first game you can reuse everyone with one tap.</p></div>`;
     root.innerHTML = `${topbar(consoleLinks(true))}<div class="wrap" style="max-width:760px">
-      <div class="chead"><div><div class="eyebrow">Dashboard · ${esc(me.org)}</div><h1>Your engagements</h1><div class="stats">${esc(me.email)}</div></div><a class="btn gold" href="/#pricing">Buy another pack</a></div>
+      <div class="chead"><div><div class="eyebrow">Dashboard · ${esc(me.org)}</div><h1>Your games</h1><div class="stats">${esc(me.email)}</div></div><a class="btn gold" href="/#pricing">Buy another pack</a></div>
       ${lastCard}
       ${aiCard()}
-      <h2 class="dh2">Current engagements</h2>
-      ${active.length ? active.map(activeCard).join("") : `<div class="panel center"><p class="muted small" style="margin:0 0 10px">You have no open engagement. Buy a pack to create a new one, then reuse your past people in it.</p><a class="btn dbtn" href="/#pricing">Create Engagement</a></div>`}
-      <h2 class="dh2" id="dHistory">History of all past engagements</h2>
-      ${past.length ? past.map(pastCard).join("") : `<div class="panel center"><p class="muted small" style="margin:0">No past engagements yet.</p></div>`}
+      <h2 class="dh2">Current games</h2>
+      ${active.length ? active.map(activeCard).join("") : `<div class="panel center"><p class="muted small" style="margin:0 0 10px">You have no open game. Buy a pack to create a new one, then reuse your past people in it.</p><a class="btn dbtn" href="/#pricing">Create Game</a></div>`}
+      <h2 class="dh2" id="dHistory">History of all past games</h2>
+      ${past.length ? past.map(pastCard).join("") : `<div class="panel center"><p class="muted small" style="margin:0">No past games yet.</p></div>`}
       <h2 class="dh2">My saved list</h2>
       <div class="panel" id="dLib"><div class="row" style="justify-content:space-between;align-items:center"><div><b style="font:600 20px var(--serif)">${d.library.count}</b> <span class="muted">${d.library.count === 1 ? "person saved" : "people saved"}</span></div><button class="btn sm danger dbtn" ${d.library.count ? "" : "disabled"} data-a="libEraseAll">${ic("trash")} Delete everyone</button></div>
         <p class="hint">Kept for up to ${d.retentionDays} days after you last use them, then deleted automatically.${d.library.soonestExpiry ? " The earliest deletion is on " + esc(dDate(d.library.soonestExpiry)) + "." : ""}</p>
@@ -1176,13 +1176,13 @@
   async function openReuse(o) {
     o = o || {};
     await loadDash();
-    if (!D.dash) return toast("We could not load your past engagements. Try again.");
+    if (!D.dash) return toast("We could not load your past games. Try again.");
     const opens = openList();
     R = { target: o.target || "", from: "", list: true, colleagues: true, family: false, roles: false, prev: null, prevErr: "", seq: 0, busy: false };
     if (!R.target) {
       if (!opens.length) {
-        return sheet(`<h2>Buy a pack to create a new engagement first</h2><p class="muted small">The data is added to an engagement that is open for entry. You do not have one yet.</p>
-          <a class="btn gold block dbtn" style="margin-top:12px" href="/#pricing">Create Engagement</a><button class="btn line block dbtn" style="margin-top:8px" data-a="closeSheet">Close</button>`);
+        return sheet(`<h2>Buy a pack to create a new game first</h2><p class="muted small">The data is added to a game that is open for entry. You do not have one yet.</p>
+          <a class="btn gold block dbtn" style="margin-top:12px" href="/#pricing">Create Game</a><button class="btn line block dbtn" style="margin-top:8px" data-a="closeSheet">Close</button>`);
       }
       if (opens.length === 1) R.target = opens[0].code;
     }
@@ -1203,13 +1203,13 @@
   function rvRender() {
     const r = R; if (!r) return;
     if (!r.target) {
-      return sheet(`<h2>Which engagement do you want to fill?</h2><p class="muted small">Choose the engagement that should receive these people.</p>
+      return sheet(`<h2>Which game do you want to fill?</h2><p class="muted small">Choose the game that should receive these people.</p>
         <div class="rvlist">${openList().map((x) => `<button type="button" class="chip" data-a="rvTarget" data-v="${esc(x.code)}"><b>${esc(x.name)}</b><span class="tiny muted">${esc(x.code)} · ${esc(dDate(x.heldAt))} · ${people(x.total)} on the list</span></button>`).join("")}</div>
         <button class="btn line block dbtn" style="margin-top:12px" data-a="closeSheet">Cancel</button>`);
     }
     const srcs = rvSources(r.target), tgt = D.dash.history.find((x) => x.code === r.target), p = r.prev;
     if (!srcs.length && !libCount()) {
-      return sheet(`<h2>Nothing to reuse yet</h2><p class="muted small">No saved people were found. Details are kept after an engagement ends.</p><button class="btn line block dbtn" style="margin-top:12px" data-a="closeSheet">Close</button>`);
+      return sheet(`<h2>Nothing to reuse yet</h2><p class="muted small">No saved people were found. Details are kept after a game ends.</p><button class="btn line block dbtn" style="margin-top:12px" data-a="closeSheet">Close</button>`);
     }
     const chipHtml = srcs.map((x) => `<button type="button" class="chip ${r.from === x.code ? "on" : ""}" role="radio" aria-checked="${r.from === x.code}" data-a="rvFrom" data-v="${esc(x.code)}"><b>${esc(x.name)}</b><span class="tiny muted">${esc(dDate(x.heldAt))} · ${people(x.peopleCount)}</span></button>`).join("")
       + (libCount() ? `<button type="button" class="chip ${r.from === "library" ? "on" : ""}" role="radio" aria-checked="${r.from === "library"}" data-a="rvFrom" data-v="library"><b>Everyone in my saved list</b><span class="tiny muted">${people(libCount())}</span></button>` : "");
@@ -1220,7 +1220,7 @@
     else if (!p) prev = `<div class="note">${ic("clock")}<span>Checking who will be added…</span></div>`;
     else {
       const total = tgt ? tgt.total + p.placesLeft : null;
-      prev = `<div class="note info" style="display:block"><div>Will add <b>${people(p.willAdd)}</b>. ${p.skipped.alreadyIn} ${p.skipped.alreadyIn === 1 ? "is" : "are"} already in this engagement. ${p.skipped.optedOut} asked us not to keep their details.</div><div style="margin-top:4px">Places left: <b>${p.placesLeft}</b>${total ? " of <b>" + total + "</b>" : ""}</div></div>`
+      prev = `<div class="note info" style="display:block"><div>Will add <b>${people(p.willAdd)}</b>. ${p.skipped.alreadyIn} ${p.skipped.alreadyIn === 1 ? "is" : "are"} already in this game. ${p.skipped.optedOut} asked us not to keep their details.</div><div style="margin-top:4px">Places left: <b>${p.placesLeft}</b>${total ? " of <b>" + total + "</b>" : ""}</div></div>`
         + (p.exceedsBy > 0 ? `<div class="err" style="margin-top:8px">${ic("alert")}<span>This adds ${people(p.willAdd)} but only ${p.placesLeft} ${p.placesLeft === 1 ? "place is" : "places are"} left. Raise your limit or untick a group.</span></div>` : "");
     }
     const ok = p && !r.prevErr && p.willAdd > 0 && p.exceedsBy <= 0 && !r.busy;
@@ -1229,7 +1229,7 @@
       <label class="lb" style="margin-top:4px">Take people from</label><div class="rvlist" role="radiogroup">${chipHtml}</div>
       <label class="lb">Who to add</label>
       ${tick("list", "People on the list", cnt("list"))}${tick("colleagues", "Colleagues who joined", cnt("colleagues"))}${tick("family", "Family members", cnt("family"))}
-      ${tick("roles", "Also make the same Hosts and Team Leads", p ? ` <b>(${p.roles.hosts} Hosts, ${p.roles.teamLeads} Team Leads)</b>` : "")}
+      ${tick("roles", "Also make the same Co-organizers and Team Leads", p ? ` <b>(${p.roles.hosts} Co-organizers, ${p.roles.teamLeads} Team Leads)</b>` : "")}
       <div id="rvPrev" style="margin-top:8px">${prev}</div>
       <button class="btn gold block dbtn" style="margin-top:14px" ${ok ? "" : "disabled"} data-a="rvGo">${r.busy ? "Adding…" : p && p.willAdd > 0 ? "Add " + people(p.willAdd) : "Add people"}</button>
       <button class="btn line block dbtn" style="margin-top:8px" data-a="closeSheet">Cancel</button></div>`);
@@ -1254,7 +1254,7 @@
     try { res = await api("POST", `/api/e/${encodeURIComponent(r.target)}/reuse`, { from: r.from, include: { list: r.list, colleagues: r.colleagues, family: r.family }, restoreRoles: r.roles }); }
     catch (e) { r.busy = false; r.prevErr = e.message; rvRender(); return; }
     closeSheet();
-    toast(`Added ${people(res.added)}${res.rolesRestored ? " · " + res.rolesRestored + " Host/Team Lead roles restored" : ""}`);
+    toast(`Added ${people(res.added)}${res.rolesRestored ? " · " + res.rolesRestored + " Co-organizer/Team Lead roles restored" : ""}`);
     const target = r.target; R = null; D.dash = null;
     S.nextStep = "people";
     if (S.role === "org" && S.code === target && S.data) { await loadConsole(); gotoStep("people"); }
@@ -1262,17 +1262,17 @@
   }
   function reuseBanner() {
     const l = D.dash.last, can = rvSources(S.code).length > 0 || libCount() > 0;
-    return `<div class="alert"><span class="dbanner" style="flex:1;min-width:220px">${ic("clock")} <span><b>Last engagement was on ${esc(dDate(l.heldAt))}</b> · Total <b>${l.total}</b> · Participated <b>${l.participated}</b></span></span>${can ? `<button class="btn sm dbtn" data-a="reuseHere">Reuse the data</button>` : ""}<a class="btn sm line dbtn" href="/console#history">History</a></div>`;
+    return `<div class="alert"><span class="dbanner" style="flex:1;min-width:220px">${ic("clock")} <span><b>Last game was on ${esc(dDate(l.heldAt))}</b> · Total <b>${l.total}</b> · Participated <b>${l.participated}</b></span></span>${can ? `<button class="btn sm dbtn" data-a="reuseHere">Reuse the data</button>` : ""}<a class="btn sm line dbtn" href="/console#history">History</a></div>`;
   }
 
   // ---- erase (always behind a confirm sheet)
   function eraseEngagement(code) {
     const x = D.dash.history.find((h) => h.code === code); if (!x) return;
-    confirmSheet({ title: `Delete the kept details of ${x.name}?`, body: `The names, numbers and departments kept from this engagement are deleted now. The totals stay. People who are also in your saved list stay there until you delete them in My saved list or they expire.`, yes: "Delete kept details", danger: true,
+    confirmSheet({ title: `Delete the kept details of ${x.name}?`, body: `The names, numbers and departments kept from this game are deleted now. The totals stay. People who are also in your saved list stay there until you delete them in My saved list or they expire.`, yes: "Delete kept details", danger: true,
       onYes: async () => { closeSheet(); const r = await run(api("POST", "/api/orgs/me/erase", { type: "engagement", code }), "Kept details deleted"); if (r) await refreshDash(); } });
   }
   function erasePerson(e164, name) {
-    confirmSheet({ title: `Delete ${name}?`, body: `Their name, number and department are deleted from your saved list and from every past engagement. <b>This also stops us keeping this number again</b>, even if you upload it in a future engagement.`, yes: "Delete this person", danger: true,
+    confirmSheet({ title: `Delete ${name}?`, body: `Their name, number and department are deleted from your saved list and from every past game. <b>This also stops us keeping this number again</b>, even if you upload it in a future game.`, yes: "Delete this person", danger: true,
       onYes: async () => { closeSheet(); const r = await run(api("POST", "/api/orgs/me/erase", { type: "person", e164 }), "Deleted"); if (r) await refreshDash(); } });
   }
   function eraseAll() {
@@ -1280,7 +1280,7 @@
       if (!$("eaOk").checked) { sheetYes = go; return toast("Tick the box to confirm."); }
       closeSheet(); const r = await run(api("POST", "/api/orgs/me/erase", { type: "all" }), "Everyone deleted"); if (r) await refreshDash();
     };
-    confirmSheet({ title: "Delete everyone you have saved?", body: "Every name, number and department kept from all your engagements is deleted. You will have to upload people again for your next engagement.", danger: true, yes: "Delete everyone", extra: `<label class="cb"><input type="checkbox" id="eaOk"> I understand this cannot be undone.</label>`, onYes: go });
+    confirmSheet({ title: "Delete everyone you have saved?", body: "Every name, number and department kept from all your games is deleted. You will have to upload people again for your next game.", danger: true, yes: "Delete everyone", extra: `<label class="cb"><input type="checkbox" id="eaOk"> I understand this cannot be undone.</label>`, onYes: go });
   }
 
   A.openEng = (el, e) => { e.preventDefault(); history.replaceState(null, "", "/console#" + el.dataset.v); startOrg(); };

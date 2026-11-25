@@ -40,7 +40,7 @@ describe("B24: no test-payment link and no sales login on public pages", () => {
     for (const f of footerPages) {
       const t = rd(f).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
       expect([f, /IT Services by Rajat Agarwal/.test(t)]).toEqual([f, true]);
-      expect([f, /Razorpay/.test(t)]).toEqual([f, true]);
+      expect([f, /Moneypenny credits/.test(t)]).toEqual([f, true]); expect([f, /Razorpay/.test(/<div class="ufpay">[\s\S]*?<\/div>/.exec(rd(f))?.[0] ?? "")]).toEqual([f, false]); // 1.12.1: the gateway is no longer named in the footer
       expect([f, rd(f).includes('href="/partner.html"')]).toEqual([f, true]);
     }
   });

@@ -32,6 +32,8 @@ export type { D1, Env };
 
 /** Payee on every receipt (owner decision 13 Nov 2026). */
 export const PAYEE = "IT SERVICES BY RAJAT AGARWAL via Razorpay";
+/** The payee as named in plain words on pages and in the AI manual (the same payee as PAYEE, without the gateway name, which marketing pages and the AI manual never name; apps/edge/test/ai-payee.test.ts keeps the two equal). */
+export const PAYEE_NAME = "IT Services by Rajat Agarwal";
 /** A game key (and a Host key made without personal data) works until this long after its game ended (owner decision 13 Nov 2026). */
 export const KEY_AFTER_END_MS = 24 * 3_600_000;
 export const GAME_ID = /^[A-Za-z0-9_-]{4,40}$/;

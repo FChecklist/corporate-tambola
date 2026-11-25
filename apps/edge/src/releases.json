@@ -1,5 +1,20 @@
 [
   {
+    "version": "1.12.1",
+    "date": "2026-11-25",
+    "releasedAtIST": "25 Nov 2026, time set at deploy",
+    "commit": "this release",
+    "title": "Owner's gap list on top of the three cups: the owner's three prices, plain words (game, player, co-organizer), short claim rules, prize presets, a claims queue and the AI payment facts",
+    "changes": [
+      "The three cup prices are now Small (up to 100 players) Rs 2,872, Medium (up to 500) Rs 4,872 ('Most chosen') and Large (up to 1,000) Rs 7,882. They live in one constant in the price list; the other five sizes are unchanged. No GST is shown and there is no money-back promise.",
+      "Plain words on the game pages and the price pages: game instead of engagement, player instead of participant, Co-organizer instead of Host. Pay now is the one payment button, and payments are named once: IT Services by Rajat Agarwal, through Moneypenny credits. The payment gateway's name is no longer on the home, price, brochure, about and Refer and earn pages.",
+      "Players see the claim rules in three short lines: one Claim is for one prize, a wrong claim is shown and the game goes on (two wrong claims for the same prize put that ticket out of that prize only), and what happens when players finish on the same number follows the game's own setting.",
+      "The prize step shows the five usual prizes first. All other houses are behind 'More options'; none was removed, and one that was ticked keeps the list open.",
+      "Game day has a claims queue (oldest first, with what came of each claim) and a wrong-claim view (ticket, prize, how many times, out of that prize or not). The pause text says Paused reaches phones as fast as the design allows and that a pause ends by itself after 30 minutes if nobody presses Resume.",
+      "The AI manual, llms.txt and the AI page name the payee and Moneypenny credits and say the AI may prepare the pre-game and winner messages but may not pay: checkout accepts only organizer and co-organizer keys, and the AI key (starts with cta_) is refused."
+    ]
+  },
+  {
     "version": "1.12.0",
     "date": "2026-11-24",
     "releasedAtIST": "24 Nov 2026, time set at deploy",

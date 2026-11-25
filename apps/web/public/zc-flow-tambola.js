@@ -1,4 +1,4 @@
-/* Corporate Tambola only: the parts of the new organizer / Host / Co-host console (?flow=new) that other games do not have.
+/* Corporate Tambola only: the parts of the new organizer / Co-organizer / Co-host console (?flow=new) that other games do not have.
    Loaded AFTER pack/zc-flow.js. It never edits the shared pack: it adds sections to the pack's dashboard and step 3 when they are drawn.
    Wired to the real engine where the engine has support (rehearsals 1.6.0, prizes, prize handed over, presence, game log, claims, delete).
    Owner rule D (29 Oct): UI layer only. Whatever the existing engine does not support is HIDDEN (no coming soon, no demo stub, no disabled look-alike). */
@@ -11,8 +11,8 @@
     : c.phase === "ok" ? "Congratulations! The claim is correct." : c.phase === "gone" ? c.prize + " is gone. It has been won by Ticket " + c.ticket + "." + (mode === "manual" ? " Press the button to roll out the next number." : "") : "";
   /** The top-right label: who is signed in, and the organizer on a second line. */
   const whoLines = (role, email, org, by) => role === "host" ? ["Host: " + email].concat(org ? ["Organizer: " + org] : []) : role === "cohost" ? ["Co-host: " + email, "You were made Co-host by: " + (by || org || "the organizer")].concat(org ? ["Organizer: " + org] : []) : ["Organizer: " + (org || "your email")];
-  /** Ready check: link shared, payment, prizes chosen are needed; Hosts added and rehearsal done are optional. */
-  const readyItems = (f) => [["Game link shared", !!f.shared, true], ["Payment", !!f.paid, true], ["Prizes chosen", !!f.prizes, true], ["Hosts added", !!f.hosts, false], ["Rehearsal done", !!f.rehearsed, false]];
+  /** Ready check: link shared, payment, prizes chosen are needed; Co-organizers added and rehearsal done are optional. */
+  const readyItems = (f) => [["Game link shared", !!f.shared, true], ["Payment", !!f.paid, true], ["Prizes chosen", !!f.prizes, true], ["Co-organizers added", !!f.hosts, false], ["Rehearsal done", !!f.rehearsed, false]];
   window.ZTAMBOLA = { claimText, whoLines, readyItems };
 
   /* ---- a Co-host opens the game with their own personal key link plus ?flow=new: whoami says who they are ---- */
@@ -49,10 +49,10 @@
   function whoLabel() {
     const org = (st.raw && st.raw.organizerEmail) || "", me = st.team && st.team.email ? st.team.email.trim() : org;
     const box = el("div", { class: "zt-who", id: "zt-who" }, whoLines(st.role || "organizer", me, org).map((l) => el("div", { text: l })));
-    if ((st.role || "organizer") === "host") { // 1.8.4 (approved mock): the Host ribbon with Sign out, and what a Host may do
+    if ((st.role || "organizer") === "host") { // 1.8.4 (approved mock): the Co-organizer ribbon with Sign out, and what a Co-organizer may do
       const out = el("a", { href: "/zc.html", class: "zt-signout", id: "zt-signout", text: "Sign out" });
       out.addEventListener("click", (e) => { e.preventDefault(); try { if (window.CTK && window.CTK.signOut) window.CTK.signOut(); else { sessionStorage.setItem("ctz-org", ""); localStorage.setItem("ctz-org", ""); } } catch { /* the page is left anyway */ } location.href = "/zc.html"; });
-      box.append(el("div", { class: "zt-hostribbon", id: "zt-hostribbon" }, el("span", { text: "You are a Host of this game " + me + " " }), out), el("p", { class: "zf-small", id: "zt-hostnote", text: "As a Host you can make any change in the game, just like the organizer, and you help run the game and let people in. The organizer and Hosts can also play the game." }));
+      box.append(el("div", { class: "zt-hostribbon", id: "zt-hostribbon" }, el("span", { text: "You are a Co-organizer of this game " + me + " " }), out), el("p", { class: "zf-small", id: "zt-hostnote", text: "As a Co-organizer you can make any change in the game, just like the organizer, and you help run the game and let people in. The organizer and Co-organizers can also play the game." }));
     }
     return box;
   }
@@ -80,7 +80,7 @@
       el("input", { type: "text", readonly: "", id: "zt-colink", value: link }),
       el("p", { class: "zf-btnrow" }, el("button", { type: "button", class: "zf-go", id: "zt-cocopy", onclick: async () => { try { await navigator.clipboard.writeText(link); dash.note = "Link copied."; } catch { dash.note = "Please copy it by hand."; } paint(); } }, "Copy link"), " ",
         el("button", { type: "button", class: "zf-add", id: "zt-cocopymsg", onclick: async () => { try { await navigator.clipboard.writeText(msg); dash.note = "Message copied."; } catch { dash.note = "Please copy it by hand."; } paint(); } }, "Copy a message to share")),
-      small("Game ID " + eid() + ". Everyone who joins using this link is recorded as a participant you invited."), coHostLimitLine(),
+      small("Game ID " + eid() + ". Everyone who joins using this link is recorded as a player you invited."), coHostLimitLine(),
       el("h2", { text: "People you invited, waiting for you" }), small(window.ZROLES ? window.ZROLES.approvalText("cohost") : "", { id: "zt-approves" }));
     const rows = T.waiting || [];
     if (!rows.length) box.append(small("Nobody is waiting right now.", { id: "zt-nowait" }));
@@ -90,7 +90,7 @@
   function deleteBlock() {
     const done = !!(st.raw && st.raw.completed) || st.demoStatus === "completed";
     if (!done) return null;
-    return el("p", {}, el("button", { type: "button", class: "zf-add zt-del green", id: "zt-delete", onclick: async () => { try { await call("POST", `/api/z/${eid()}/erase`, {}); dash.note = "Participant data deleted."; } catch (e) { dash.note = e.message; } Z.draw(); } }, "Delete all participant data"));
+    return el("p", {}, el("button", { type: "button", class: "zf-add zt-del green", id: "zt-delete", onclick: async () => { try { await call("POST", `/api/z/${eid()}/erase`, {}); dash.note = "Player data deleted."; } catch (e) { dash.note = e.message; } Z.draw(); } }, "Delete all player data"));
   }
 
   /* ---- Step 1: how the game starts and who calls the numbers (the engine's own startMode / callMode, 1.5.0 wording) ---- */

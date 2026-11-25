@@ -46,7 +46,7 @@
     let m = "";
     if (!started) {
       if (S.status === "starting" && S.liveAt) m = `<div>Starting in</div><div class="cd" id="cd">${Math.max(0, Math.ceil((S.liveAt - now()) / 1000))} s</div>`;
-      else m = `<div>The engagement starts soon</div><small>Please keep your phone ready</small>`;
+      else m = `<div>The game starts soon</div><small>Please keep your phone ready</small>`;
     }
     $("centre").classList.toggle("msgmode", !!m);
     show(msg, !!m);
@@ -294,7 +294,7 @@
         render(); break;
       }
       case "starting": S.status = "starting"; S.liveAt = t + (m.inMs || 0); S.feed = ""; render(); break;
-      case "live": S.status = "started"; S.liveAt = null; S.paused = null; announce("The engagement is live"); render(); break;
+      case "live": S.status = "started"; S.liveAt = null; S.paused = null; announce("The game is live"); render(); break;
       case "call":
         S.status = "started"; S.callNo = m.callNo; S.current = m.number; S.paused = S.paused === "claim" || S.paused === "result" ? S.paused : null;
         render();

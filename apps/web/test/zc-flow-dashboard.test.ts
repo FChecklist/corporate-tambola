@@ -112,12 +112,12 @@ test("the share card: Game ID, game link, Copy game link, Copy a message to shar
   info = { unpaid: false, startMs: START };
   const win = page(); await wait();
   const d = win.document;
-  expect(d.getElementById("zf-sh").textContent).toBe("Share this game link with your participants.");
+  expect(d.getElementById("zf-sh").textContent).toBe("Share this game link with your players.");
   expect(d.getElementById("zf-shareid").textContent).toBe("EABCDEF");
   expect([...d.querySelectorAll("#zf-sharecard button, #zf-sharecard a")].map((n: any) => n.textContent)).toEqual(["Copy game link", "Copy a message to share", "Share on WhatsApp"]);
   expect(d.getElementById("zf-sharemsg").textContent).toContain("Game ID: EABCDEF");
   expect(decodeURIComponent(d.getElementById("zf-whatsapp").getAttribute("href").split("text=")[1])).toBe(d.getElementById("zf-sharemsg").textContent);
-  expect(d.getElementById("zf-sharecard").textContent).toContain("Hosts and Co-hosts use this same link.");
+  expect(d.getElementById("zf-sharecard").textContent).toContain("Co-organizers and Co-hosts use this same link.");
 });
 
 test("Payment has a pill (Pending amber, Done green, Free game) and the small print only while it is pending", async () => {

@@ -43,8 +43,8 @@ function oracle(sc: any, minutesToStart: number) {
     [sc.link === "open", "in", []],
     [sc.validation === "system" && sc.onList, "in", []],
     [sc.waited >= 30, "lapsed", []],
-    [sc.link === "cohost", "waiting", ["Co-host", "Host", "organizer"]],
-    [true, "waiting", ["Host", "organizer"]],
+    [sc.link === "cohost", "waiting", ["Co-host", "Co-organizer", "organizer"]],
+    [true, "waiting", ["Co-organizer", "organizer"]],
   ];
   const r = rules.find((x) => x[0])!; return { outcome: r[1], approvers: r[2] };
 }
@@ -80,7 +80,7 @@ test("logic: every scenario of the matrix (10,000+) gives the owner's outcome an
       if (kept !== wantKept) bad.push("A/B kept=" + kept + " " + pk2);
       if (prizeTextFor({ text: "Hamper", ...(sc.perTicket ? { textB: "Watch" } : {}) }, "B") !== (sc.perTicket ? "Watch" : "Hamper")) bad.push("A/B text " + pk2); }
     // who may let the person in: exactly the roles the oracle names
-    if (want.outcome === "waiting" && R.canLetIn(sc.decider, got.approvers) !== want.approvers.includes({ organizer: "organizer", host: "Host", cohost: "Co-host", familyhost: "family host" }[sc.decider as string] as string)) bad.push("role " + JSON.stringify(sc));
+    if (want.outcome === "waiting" && R.canLetIn(sc.decider, got.approvers) !== want.approvers.includes({ organizer: "organizer", host: "Co-organizer", cohost: "Co-host", familyhost: "family host" }[sc.decider as string] as string)) bad.push("role " + JSON.stringify(sc));
     if (want.outcome === "in" && sc.link === "open") { const [em, okEm] = EMAILS[n % EMAILS.length]; emailChecks++; if ((cleanEmail(em) !== null) !== okEm || (cleanEmail(em) !== null) !== (em !== "" && EMAIL_ORACLE(em))) bad.push("email " + em); }
     // prizes: Super Bumper only with 2 tickets and only the ticked Houses 1 to n, each once; never an A/B split; one Super Bumper prize line per House
     const pk = sc.tickets + "/" + sc.bumper; let two = PRIZE_CACHE.get(pk);
@@ -97,7 +97,7 @@ test("logic: every scenario of the matrix (10,000+) gives the owner's outcome an
 test("logic: the Step 1 summary line is right for the four start and caller choices, and every role reads who approves", () => {
   const w = newPage();
   for (const st of AXES.start) for (const ca of AXES.caller) expect(w.ZTAMBOLA.runSummary({ start: st, call: ca }, "the time you set")).toBe(SUMMARY(st, ca));
-  expect(R.approvalText("cohost")).toBe(""); expect(R.approvalText("host")).toContain("wait for you or the organizer"); expect(R.approvalText("organizer")).toContain("wait for you or a Host"); // 1.7.0: only what the engine does (no Co-host or family approval sentences)
+  expect(R.approvalText("cohost")).toBe(""); expect(R.approvalText("host")).toContain("wait for you or the organizer"); expect(R.approvalText("organizer")).toContain("wait for you or a Co-organizer"); // 1.7.0: only what the engine does (no Co-host or family approval sentences)
   for (const r of ["organizer", "host", "cohost"]) expect(/\bwe\b|invite|private|Rs /i.test(R.approvalText(r))).toBe(false);
 });
 
@@ -124,7 +124,7 @@ test("wire: every card and size becomes the right audience payload; every start/
 test("smoke: every step draws for all three cards and both ticket counts without an error", async () => {
   let drawn = 0;
   for (const tix of [1, 2]) for (const card of ["people", "family", "extended"]) {
-    const w = newPage([], (u) => (u.includes("ai-manifest") ? { packs: [{ upTo: 100, inr: 2999 }] } : { ok: true }));
+    const w = newPage([], (u) => (u.includes("ai-manifest") ? { packs: [{ upTo: 100, inr: 2872 }] } : { ok: true }));
     const F = w.ZFLOW; F.state.eid = "EABCDEF"; F.who.card = card; F.prizes.tix = tix; F.state.when = { ms: Date.now() + 86400000, zone: "Asia/Kolkata" };
     for (let step = 1; step <= 5; step++) { for (let k = 1; k < step; k++) F.state.done[k] = true; F.state.open = step; F.draw(); await tick(15); drawn++; expect(w.document.getElementById("zf-sec" + step)).not.toBe(null); }
   }

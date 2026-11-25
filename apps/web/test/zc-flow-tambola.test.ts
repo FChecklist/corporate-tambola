@@ -22,14 +22,14 @@ test("claim messages are the owner's words", () => {
   expect(t.claimText({ phase: "ok" }, "auto")).toBe("Congratulations! The claim is correct.");
   expect(t.claimText({ phase: "gone", ticket: 7, prize: "Top Line" }, "manual")).toContain("Press the button to roll out the next number.");
 });
-test("who is signed in is shown on two lines for Host and Co-host", () => {
+test("who is signed in is shown on two lines for Co-organizer and Co-host", () => {
   const t = Tz();
   expect(t.whoLines("host", "h@a.com", "o@a.com")).toEqual(["Host: h@a.com", "Organizer: o@a.com"]);
   expect(t.whoLines("cohost", "c@a.com", "o@a.com")).toEqual(["Co-host: c@a.com", "You were made Co-host by: o@a.com", "Organizer: o@a.com"]);
   expect(t.whoLines("", "o@a.com", "o@a.com")).toEqual(["Organizer: o@a.com"]);
 });
 test("ready check: hosts and rehearsal are optional", () => {
-  const r = Tz().readyItems({}); expect(r.filter((x: any) => x[2]).length).toBe(3); expect(r.filter((x: any) => !x[2]).map((x: any) => x[0])).toEqual(["Hosts added", "Rehearsal done"]);
+  const r = Tz().readyItems({}); expect(r.filter((x: any) => x[2]).length).toBe(3); expect(r.filter((x: any) => !x[2]).map((x: any) => x[0])).toEqual(["Co-organizers added", "Rehearsal done"]);
 });
 test("no coming soon, demo stub, lucky draw stub or roll button on the dashboard", async () => {
   const win = page(), s = win.ZFLOW.state; s.eid = "EABCDEF"; s.info = { published: true, paid: true, startMs: Date.now() + 3 * 3600000 }; s.raw = { startMs: s.info.startMs, gameMinutes: 60 };
@@ -55,7 +55,7 @@ function stepPage(step: number, setup?: (s: any, w: any) => void) {
   const win: any = new Window({ url: "http://localhost/zc.html?flow=new&e=EABCDEF" });
   win.document.body.innerHTML = '<main id="app"></main>';
   win.ZG = { roundAt: (ms: number) => Math.floor(ms / 3000), PRIZE_HOUSES };
-  const fakeFetch = async (url: string) => ({ ok: true, json: async () => (url.includes("ai-manifest") ? { packs: [{ upTo: 100, inr: 2999 }, { upTo: 250, inr: 3799 }] } : { ok: true }) });
+  const fakeFetch = async (url: string) => ({ ok: true, json: async () => (url.includes("ai-manifest") ? { packs: [{ upTo: 100, inr: 2872 }, { upTo: 250, inr: 3799 }] } : { ok: true }) });
   new Function("window", "document", "location", "fetch", "MutationObserver", src)(win, win.document, win.location, fakeFetch, win.MutationObserver);
   const s = win.ZFLOW.state; s.eid = "EABCDEF"; for (let k = 1; k < step; k++) s.done[k] = true; s.open = step; if (setup) setup(s, win); win.ZFLOW.draw();
   return win;
