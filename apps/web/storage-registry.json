@@ -220,6 +220,16 @@
       "keys": [
         "ctz-return"
       ]
+    },
+    {
+      "id": "game-alert",
+      "store": "localStorage",
+      "say": "On a player's phone: a yes-or-no note that the player asked to be told when a game begins (one note for the game), and a short list of alert addresses whose delete has to be tried again, so the right button shows. Nothing in it is a name, e-mail or phone. It is only there when the owner has switched game alerts on.",
+      "keys": [
+        "*",
+        "corporatePush.v1pending"
+      ],
+      "keysNote": "The key written * is corporatePush.v1. followed by the game id or the word home: the scan cannot follow a prefix joined to a changing part in push-optin.js (copied unchanged from the notification service)"
     }
   ],
   "cookies": [

@@ -29,7 +29,8 @@ describe("LR-1: no code path takes money from a participant", () => {
     expect(paycsp).toContain("https://checkout.razorpay.com");
     const usingPay = [...b.matchAll(/\["(\/[a-z-]+)", PAYCSP, (?:true|false)\]/g)].map((m) => m[1]).sort();
     expect(usingPay).toEqual(["/pay", "/paylink", "/paytest"]); // no game, phone, big-screen or demo page is among them
-    for (const p of ["/z", "/big", "/demo", "/preview"]) expect(b).toContain(`["${p}", ${p === "/big" ? "PLAINCSP" : "GAMECSP"},`);
+    for (const p of ["/z", "/big", "/demo", "/preview"]) expect(b).toContain(`["${p}", ${p === "/big" ? "PLAINCSP" : p === "/z" ? "PLAYCSP" : "GAMECSP"},`); // /z carries the game header plus (only when set) the game-alert service address in connect-src; never the payment provider
+    expect(b.match(/const PLAYCSP = .*/)![0]).toContain("GAMECSP");
   });
   test("joining, playing and the public answers create no payment, order, invoice or entitlement, and show no payment link", async () => {
     const k = (await j(await call("POST", "/api/start", { email: "boss@acme.com" }))).token as string;

@@ -12,6 +12,7 @@
     if (fid) { const e = document.getElementById(fid); if (e && e !== document.activeElement) { try { e.focus({ preventScroll: true }); if (ss && e.setSelectionRange) e.setSelectionRange(ss[0], ss[1]); } catch {} } } };
   const q = new URLSearchParams(location.search);
   const LAST = "ct-last-eid";
+  let overSent = false; const overMark = () => { if (overSent) return; overSent = true; try { document.documentElement.setAttribute("data-game-over", "1"); document.dispatchEvent(new CustomEvent("ct:game-over")); } catch { /* the page never depends on it */ } }; // the game is over (ended, did not start, or cancelled): the "notify me" block (push-boot.js) then offers "Keep notifying me about new games"
   const DEMO = window.__CT_DEMO || null; // the free demo (demo.html) runs this same page with a preloaded script and nothing stored on our side
   let EID = DEMO ? DEMO.eid : (q.get("e") || location.hash.replace(/^#/, "") || "").trim();
   if (!DEMO) try { if (EID) localStorage.setItem(LAST, EID); else EID = localStorage.getItem(LAST) || ""; } catch {} // the installed app opens without the link: use the last game
@@ -1049,6 +1050,7 @@
     if (INFO.rehearsal && INFO.rehearsal.over) { $app.innerHTML = rehearsalOverHtml(); return; } // an ended rehearsal: nothing else is shown, the real game's link is offered
     if (BOGEYASK && (v.claimNow || []).length) BOGEYASK = null; // a real prize to claim: the question must never sit on top of the gold buttons
     if (window.ctzView) window.ctzView(v); // the flight recorder (blackbox.js) learns which stage the game is in
+    if (v.phase === "ended" || INFO.dns || INFO.cancelled) overMark();
     awake = wantAwake(v, { dns: INFO.dns, cancelled: INFO.cancelled, removed: ME.removed, checkinWaiting: !!(INFO.checkin && v.pid && !CK.present), graceSecs: GRACE_SECS }); keepAwake(awake); // held from check-in (or about a minute before the first number) to the end of the game, a pause included
     if (!v.won) v.won = []; // an older saved copy of the game code during an update: never break the screen
     if (INFO.dns) { if (timer) { clearInterval(timer); timer = null; } clearInterval(J.timer); mediaHost.style.display = "none"; $app.innerHTML = dnsView(); window.__ctzOff = v.phase === "boot"; paintBrand(); return; } // a game that did not start: one calm screen, nobody can join or pay

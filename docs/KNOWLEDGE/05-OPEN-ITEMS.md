@@ -47,3 +47,6 @@ See `10-RELEASE-1.11.1.md`, section Open: two audits on the exact head commit, t
 
 ## Release 1.11.2 (21 Nov 2026): what is open
 See `11-RELEASE-1.11.2.md`, section Open: two audits on the exact head commit, then a deploy. The caps are a ceiling, not a lock: with many networks and many helper accounts the site-wide caps (30 data-request mails to the owner a day, 30 Help Desk invitations an hour) can still be filled, and then real helpers wait. The owner's old address is still in the history of git (a pull request cannot remove it). Still open by choice: Turnstile, `List-Unsubscribe`, owner e-mail for the 80 % and 100 % alerts, a site-wide cap on the sign-in code.
+
+## Release 1.13.0 (25 Nov 2026): what is open
+See `13-RELEASE-1.13.0.md`, section Open: two audits on the exact head commit; then, only when the owner wants game alerts, the order to switch on (apply migration 0034, set the two settings, fill in the one address in `push-boot.js`). The owner decides whether the one terms document (`terms.html`, section Privacy and Data) and the sub-processors page should carry the same words as `privacy.html` BEFORE the button is lit, because the privacy page only points to that document. Nothing in 1.13.0 is switched on.

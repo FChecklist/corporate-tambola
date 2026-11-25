@@ -37,6 +37,8 @@ Where things are set:
 | `PAY_SITE` | The name this site goes by in the central ledger | Optional Pages variable | setting |
 | `PAY_HOP_URL` | The payment page on the website registered with Razorpay | wrangler var | setting |
 | `PUBLIC_ORIGIN` | The public web address of this site (links in mails, payment return) | wrangler var | setting |
+| `PUSH_URL` | The https address of the notification service for game alerts (corporate-push). Both PUSH_URL and PUSH_ADMIN_KEY must be set before any alert is sent or purged; with either missing the "notify me" button stays dark | Optional Pages variable | setting |
+| `PUSH_ADMIN_KEY` | The notification service's admin key (32 or more random characters). Sent only in the Authorization header of the service's /send and /purge calls | Pages secret | secret |
 | `MAIL_FROM` | The sender name and address of every mail | wrangler var | setting |
 | `MAIL_REPLY_TO` | Reply-to address of mails (optional) | Optional Pages variable | setting |
 | `MAIL_RETRY_MS` | Wait in milliseconds before the first re-try of a refused mail (default 800; tests set 0) | Optional Pages variable | setting |

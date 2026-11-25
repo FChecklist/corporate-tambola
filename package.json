@@ -1,6 +1,6 @@
 {
   "name": "corporate-tambola",
-  "version": "1.11.2",
+  "version": "1.13.0",
   "private": true,
   "workspaces": [
     "packages/*",
