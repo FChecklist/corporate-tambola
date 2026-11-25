@@ -33,8 +33,8 @@ test("the read-back shows the game, who it is for, tickets, every ticked prize w
   const text = win.document.getElementById("zf-read").textContent;
   expect(text).toContain("Diwali party");
   expect(text).toContain("(India (IST))");
-  expect(text).toContain("Up to 100 participants");
-  expect(text).toContain("1 ticket for each participant");
+  expect(text).toContain("Up to 100 players");
+  expect(text).toContain("1 ticket for each player");
   expect(text).toContain("Full House");
   expect(text).toContain("Gift voucher");
   expect(text).toContain("Not added");
@@ -48,7 +48,7 @@ test("a prize won several times reads back as such; Super Bumper House is named"
   expect(text).toContain("Super Bumper House");
 });
 
-test("Hosts and Co-hosts block is hidden in step 5 (owner rule D): no coming soon, no email boxes beyond the organizer's own", () => {
+test("Co-organizers and Co-hosts block is hidden in step 5 (owner rule D): no coming soon, no email boxes beyond the organizer's own", () => {
   const win = page();
   const text = win.document.getElementById("zf-sec5").textContent;
   expect(text).not.toContain("Coming soon");

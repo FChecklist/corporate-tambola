@@ -1,6 +1,6 @@
 {
   "name": "@tambola/sim",
-  "version": "1.12.0",
+  "version": "1.12.1",
   "type": "module",
   "dependencies": {
     "@tambola/shared": "workspace:*",

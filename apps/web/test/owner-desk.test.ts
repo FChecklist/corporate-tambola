@@ -66,11 +66,11 @@ describe("the owner desk page", () => {
     el("key").value = "wrong"; await click(p, "deskPanel"); expect(txt(p)).toMatch(/Not found\. Check the key\./); expect(txt(p)).not.toMatch(/Game ID/);
     el("key").value = "plat"; await click(p, "deskPanel"); await tick(150); expect(txt(p)).toMatch(/Find game/);
     el("pf_q").value = "OD-3"; await submit(el("pf_q").form);
-    expect(txt(p)).toMatch(/Up to 100/); expect(txt(p)).toMatch(/Rs 2,999/); expect(txt(p)).toMatch(/published, not paid/);
+    expect(txt(p)).toMatch(/Up to 100/); expect(txt(p)).toMatch(/Rs 2,872/); expect(txt(p)).toMatch(/published, not paid/);
     el("pf_direction").value = "down"; el("pf_amount").value = "400"; el("pf_reason").value = "agreed on phone 2 Nov"; await submit(el("pf_amount").form);
-    expect(txt(p)).toMatch(/Reduce by Rs 400 \(agreed on phone 2 Nov\)/); expect(txt(p)).toMatch(/Organizer paysRs 2,599/); expect(txt(p)).toMatch(/Tell the organizer by phone/);
+    expect(txt(p)).toMatch(/Reduce by Rs 400 \(agreed on phone 2 Nov\)/); expect(txt(p)).toMatch(/Organizer paysRs 2,472/); expect(txt(p)).toMatch(/Tell the organizer by phone/);
     const fill = [...doc.querySelectorAll("#deskPanelOut button")].find((b: any) => /Rs 1 \(payment test\)/.test(b.textContent)) as any; fill.dispatchEvent(new p.win.MouseEvent("click", { bubbles: true }));
-    expect(el("pf_amount").value).toBe("2998");
+    expect(el("pf_amount").value).toBe("2871");
     const rm = [...doc.querySelectorAll("#deskPanelOut button")].find((b: any) => b.textContent === "Remove") as any; rm.dispatchEvent(new p.win.MouseEvent("click", { bubbles: true })); await tick(300);
     expect(txt(p)).not.toMatch(/Reduce by/); expect(txt(p)).toMatch(/Save price/);
   });

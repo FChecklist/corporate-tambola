@@ -49,7 +49,7 @@ describe("game ID with the payment", () => {
   });
   test("a game with the owner's private price: still just the game ID, and no new words anywhere an organizer can see", async () => {
     const g = await game();
-    expect((await call("POST", "/api/owner/price", { eid: g.id, currency: "INR", amount: -2998, reason: "Rs 1 live test" }, { "x-organizer": "plat" })).status).toBe(200);
+    expect((await call("POST", "/api/owner/price", { eid: g.id, currency: "INR", amount: -2871, reason: "Rs 1 live test" }, { "x-organizer": "plat" })).status).toBe(200);
     const c = await checkout(g.key, { eid: g.id, email: g.email }); expect(c.body.razorpay.amount).toBe(100);
     expect(sentOrders.at(-1).notes.game_id).toBe(g.id);
     capture(c.body, "pay_gi2"); const res = await j(await verify(c.body, "pay_gi2"));

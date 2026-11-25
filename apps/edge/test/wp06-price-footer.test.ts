@@ -36,11 +36,11 @@ describe("B24: no test-payment link and no sales login on public pages", () => {
       expect([f, /#joinbox/.test(h)]).toEqual([f, false]);
     }
   });
-  test("the footer still names the one payee and Razorpay, and keeps the Refer and earn link", () => {
+  test("the footer names the one payee and Moneypenny credits (not the gateway), and keeps the Refer and earn link", () => {
     for (const f of footerPages) {
       const t = rd(f).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
       expect([f, /IT Services by Rajat Agarwal/.test(t)]).toEqual([f, true]);
-      expect([f, /Razorpay/.test(t)]).toEqual([f, true]);
+      expect([f, /Moneypenny credits/.test(t)]).toEqual([f, true]); const ufpay = /<div class="ufpay">[\s\S]*?<\/div>/.exec(rd(f)); expect([f, !!ufpay]).toEqual([f, true]); expect([f, /Razorpay/.test(ufpay![0])]).toEqual([f, false]); // 1.12.1: the gateway is no longer named in the footer (the block must exist: an empty match would pass for nothing)
       expect([f, rd(f).includes('href="/partner.html"')]).toEqual([f, true]);
     }
   });

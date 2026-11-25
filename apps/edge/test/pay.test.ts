@@ -66,7 +66,7 @@ describe("checkout", () => {
   test("a valid checkout creates one Razorpay order for the right amount in paise and one unpaid payment row", async () => {
     const r = await (await buy()).json() as any;
     expect(r.mode).toBe("razorpay");
-    expect(r.razorpay.amount).toBe(499900); // 500 participants = Rs 4,999 (no GST)
+    expect(r.razorpay.amount).toBe(487200); // 500 participants = Rs 4,872 (no GST)
     expect(r.razorpay.name).toBe("Corporate Tambola"); expect(r.razorpay.description).toBe("(closed-group housie software) | owned and made by IT Services by Rajat Agarwal"); // the Razorpay window shows the product as the title and the seller under it
     expect(rz.orders).toHaveLength(1);
     expect(raw.query("SELECT status FROM payment").get()).toEqual({ status: "created" });
@@ -112,14 +112,14 @@ describe("verify (the buyer's browser says it paid)", () => {
     expect(raw.query("SELECT COUNT(*) c FROM outbox WHERE to_addr=?").get(OWNER_NOTIFY_EMAIL)).toEqual({ c: 1 }); // and paying again sent no second note
   });
   test("a wrong signature is refused and nothing is granted", async () => {
-    rz.payments.pay_1 = { id: "pay_1", order_id: orderId, status: "captured", amount: 499900 };
+    rz.payments.pay_1 = { id: "pay_1", order_id: orderId, status: "captured", amount: 487200 };
     const r = await call("POST", "/api/payments/verify", { paymentId, razorpay_order_id: orderId, razorpay_payment_id: "pay_1", razorpay_signature: "deadbeef" });
     expect(r.status).toBe(400);
     expect(raw.query("SELECT COUNT(*) c FROM entitlement").get()).toEqual({ c: 0 });
   });
   test("a valid signature for the wrong amount, wrong order, failed or unknown payment grants nothing", async () => {
     expect((await complete(paymentId, orderId, "pay_2", "captured", 100)).status).toBe(400);
-    rz.orders.push({ id: "order_other", amount: 499900, currency: "INR" });
+    rz.orders.push({ id: "order_other", amount: 487200, currency: "INR" });
     expect((await complete(paymentId, "order_other", "pay_3")).status).toBe(404);
     expect((await complete(paymentId, orderId, "pay_4", "failed")).status).toBe(402);
     const r = await call("POST", "/api/payments/verify", { paymentId, razorpay_order_id: orderId, razorpay_payment_id: "pay_ghost", razorpay_signature: hmac("sek", `${orderId}|pay_ghost`) });
@@ -141,7 +141,7 @@ describe("webhook (the buyer closed the tab)", () => {
   let paymentId = "", orderId = "";
   beforeEach(async () => { const r = await (await buy()).json() as any; paymentId = r.paymentId; orderId = r.razorpay.orderId; });
   const hook = (ev: unknown, secret = "whsec") => { const raw = JSON.stringify(ev); return call("POST", "/api/payments/webhook", raw, { "x-razorpay-signature": hmac(secret, raw) }); };
-  const captured = (amount = 499900) => ({ event: "payment.captured", payload: { payment: { entity: { id: "pay_w1", order_id: orderId, amount } } } });
+  const captured = (amount = 487200) => ({ event: "payment.captured", payload: { payment: { entity: { id: "pay_w1", order_id: orderId, amount } } } });
   test("a signed capture fulfils, and a repeat delivery does not double up", async () => {
     expect((await hook(captured())).status).toBe(200);
     expect((await hook(captured())).status).toBe(200);
@@ -166,7 +166,7 @@ describe("webhook (the buyer closed the tab)", () => {
     await hook(captured()); await hook(captured()); await hook(captured(), "wrong"); await hook({ event: "payment.failed", payload: {} });
     const rows = raw.query("SELECT event, signature_ok, outcome, http_status, payment_id, rzp_order_id, rzp_payment_id, amount_minor FROM webhook_log ORDER BY id").all() as any[];
     expect(rows.map((r) => r.outcome)).toEqual(["marked paid by webhook", "already paid (no change)", "bad signature", "ignored: not a payment event"]);
-    expect(rows[0]).toMatchObject({ event: "payment.captured", signature_ok: 1, http_status: 200, payment_id: paymentId, rzp_order_id: orderId, rzp_payment_id: "pay_w1", amount_minor: 499900 });
+    expect(rows[0]).toMatchObject({ event: "payment.captured", signature_ok: 1, http_status: 200, payment_id: paymentId, rzp_order_id: orderId, rzp_payment_id: "pay_w1", amount_minor: 487200 });
     expect(rows[2]).toMatchObject({ signature_ok: 0, http_status: 400, payment_id: null });
     const led = raw.query("SELECT * FROM payment_ledger WHERE payment_id=?").get(paymentId) as any;
     expect(led).toMatchObject({ product: "corporate_tambola", product_name: "Corporate Tambola", product_type: "game_pack", product_ref: "pack_500", status: "paid", webhooks_received: 2 });
@@ -174,7 +174,7 @@ describe("webhook (the buyer closed the tab)", () => {
   });
   test("the browser verify arriving after the webhook returns the same result without a second grant", async () => {
     await hook(captured());
-    rz.payments.pay_w1 = { id: "pay_w1", order_id: orderId, status: "captured", amount: 499900 };
+    rz.payments.pay_w1 = { id: "pay_w1", order_id: orderId, status: "captured", amount: 487200 };
     const r = await call("POST", "/api/payments/verify", { paymentId, razorpay_order_id: orderId, razorpay_payment_id: "pay_w1", razorpay_signature: hmac("sek", `${orderId}|pay_w1`) });
     expect(r.status).toBe(200);
     expect(raw.query("SELECT COUNT(*) c FROM entitlement").get()).toEqual({ c: 1 });
@@ -243,15 +243,15 @@ describe("invoices", () => {
     const r = await (await buy()).json() as any; const f = await (await complete(r.paymentId, r.razorpay.orderId)).json() as any;
     const html = await (await call("GET", f.invoiceUrl)).text();
     expect(html).not.toContain("DRAFT"); expect(html).toContain("<b>INVOICE</b>"); expect(html).not.toContain("TAX INVOICE");
-    expect(html).toContain("IT Services by Rajat Agarwal"); expect(html).toContain("hello@corporatetambola.com"); expect(html).toContain("4,999.00");
+    expect(html).toContain("IT Services by Rajat Agarwal"); expect(html).toContain("hello@corporatetambola.com"); expect(html).toContain("4,872.00");
     expect(html).not.toMatch(/CGST|SGST|IGST|Taxable value|Place of supply|GSTIN|SHOBHA/i);
-    expect(f.tax).toBe(0); expect(f.total).toBe(4999);
+    expect(f.tax).toBe(0); expect(f.total).toBe(4872);
   });
   test("filling in a GSTIN in the configuration does not switch GST on: only the code switch GST_ENABLED does (owner decision 2026-10-09)", async () => {
     env.COMPANY_JSON = JSON.stringify({ gstin: "07AAAAA0000A1Z5", stateCode: "07", sacCode: "998439", email: "billing@x.test" });
     const r = await (await buy()).json() as any; const f = await (await complete(r.paymentId, r.razorpay.orderId)).json() as any;
     const html = await (await call("GET", f.invoiceUrl)).text();
-    expect(html).not.toMatch(/CGST|SGST|IGST|Taxable value/); expect(html).toContain("4,999.00"); expect(f.tax).toBe(0);
+    expect(html).not.toMatch(/CGST|SGST|IGST|Taxable value/); expect(html).toContain("4,872.00"); expect(f.tax).toBe(0);
   });
 });
 
@@ -523,7 +523,7 @@ describe("central payments (every order opens through IT Services by Rajat Agarw
     const r = await (await buy()).json() as any;
     expect(r.razorpay.orderId).toBe("order_c1");
     expect(central.orders).toHaveLength(1);
-    expect(central.orders[0]).toMatchObject({ key: "psk_test", site: "corporate-tambola.pages.dev", product: "corporate_tambola", plan: "pack_500", amount_minor: 499900, currency: "INR" });
+    expect(central.orders[0]).toMatchObject({ key: "psk_test", site: "corporate-tambola.pages.dev", product: "corporate_tambola", plan: "pack_500", amount_minor: 487200, currency: "INR" });
     expect(central.orders[0].payment_ref).toMatch(/^pay_[0-9a-f]{16}$/);
   });
   test("the payment test is the payment_test plan", async () => {

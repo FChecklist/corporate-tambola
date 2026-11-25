@@ -1,5 +1,5 @@
 // OWNER PRICING UPDATE 2026-11-23: three cups for every game and console, one list of prices, the same words everywhere.
-//   Small up to 100 = Rs 2,999 | Medium up to 500 = Rs 4,999 ("Most chosen") | Large up to 1,000 = Rs 7,499
+//   Small up to 100 = Rs 2,872 | Medium up to 500 = Rs 4,872 ("Most chosen") | Large up to 1,000 = Rs 7,882
 //   behind "See more sizes": 250 = 3,799 | 750 = 6,299 | 2,500 = 11,999 | 5,000 = 17,999 | 10,000 = 29,999. No GST shown, no money-back promise.
 // The expected prices are written out LITERALLY here (not read from pricing.ts), so changing a price in only one place turns a test red.
 // What each test checks, and how it was proven red: see the pull request comment of this release (break one thing, see it fail, restore).
@@ -16,7 +16,7 @@ const PUB = join(ROOT, "apps/web/public");
 const read = (f: string) => readFileSync(join(PUB, f), "utf8");
 const textOf = (html: string) => html.replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&#8377;/g, "₹").replace(/&middot;/g, "·").replace(/&amp;/g, "&").replace(/&#39;|&rsquo;/g, "'").replace(/\s+/g, " ");
 
-const NEW_INR = [2999, 3799, 4999, 6299, 7499, 11999, 17999, 29999];
+const NEW_INR = [2872, 3799, 4872, 6299, 7882, 11999, 17999, 29999];
 const SIZES = [100, 250, 500, 750, 1000, 2500, 5000, 10000];
 const USD = [34, 51, 67, 84, 101, 169, 253, 421];
 const nf = (n: number) => n.toLocaleString("en-IN");
@@ -68,7 +68,7 @@ describe("one list of prices", () => {
     expect(zc).toContain('const CUP_SIZES = [[100, "Small", false], [500, "Medium", true], [1000, "Large", false]];');
     expect(flow).toContain('const CUP_NAMES = { 100: "Small", 500: "Medium", 1000: "Large" }, CUP_MOST_CHOSEN = 500;');
     const fb = (src: string, re: RegExp) => [...(src.match(re)![1]!.matchAll(/upTo: (\d+), inr: (\d+)/g))].map((m) => [Number(m[1]), Number(m[2])]);
-    expect(fb(zc, /\(S\.packs \|\| \[\]\)\.length \? S\.packs : \[([^\]]*)\]/)).toEqual([[100, 2999], [500, 4999], [1000, 7499]]);
+    expect(fb(zc, /\(S\.packs \|\| \[\]\)\.length \? S\.packs : \[([^\]]*)\]/)).toEqual([[100, 2872], [500, 4872], [1000, 7882]]);
     expect(fb(flow, /const FALLBACK_PACKS = \[([^\]]*)\]/)).toEqual(SIZES.map((n, i) => [n, NEW_INR[i]!]));
   });
 });
@@ -88,8 +88,8 @@ describe("the home page: three cups", () => {
     const cups = [...d.querySelectorAll("#packs .cup")];
     expect(cups.length).toBe(3);
     expect(cups.map((c: any) => c.querySelector("h3").textContent)).toEqual(["Small", "Medium", "Large"]);
-    expect(cups.map((c: any) => c.querySelector(".cup-price").textContent)).toEqual(["₹2,999", "₹4,999", "₹7,499"]);
-    expect(cups.map((c: any) => c.querySelector(".cup-up").textContent)).toEqual(["Up to 100 participants", "Up to 500 participants", "Up to 1,000 participants"]);
+    expect(cups.map((c: any) => c.querySelector(".cup-price").textContent)).toEqual(["₹2,872", "₹4,872", "₹7,882"]);
+    expect(cups.map((c: any) => c.querySelector(".cup-up").textContent)).toEqual(["Up to 100 players", "Up to 500 players", "Up to 1,000 players"]);
     const pop = [...d.querySelectorAll("#packs .cup-pop")]; expect(pop.length).toBe(1); expect(pop[0]!.querySelector("h3")!.textContent).toBe("Medium");
     expect([...d.querySelectorAll("#packs .cup-tag")].map((t: any) => t.textContent)).toEqual(["Most chosen"]);
     expect(d.getElementById("pack")!.value).toBe("500"); // the hero list starts on the Medium cup
@@ -103,7 +103,7 @@ describe("the home page: three cups", () => {
     d.querySelector('[data-c="INR"]')!.click();
     const more = d.querySelector("#packs details.cup-more")!; expect(more.querySelector("summary")!.textContent).toBe("See more sizes");
     const rows = [...more.querySelectorAll("tbody tr")].map((r: any) => [r.children[0].textContent, r.children[1].textContent, Number(r.querySelector("[data-buy]").dataset.buy)]);
-    expect(rows).toEqual([["Up to 250 participants", "₹3,799", 250], ["Up to 750 participants", "₹6,299", 750], ["Up to 2,500 participants", "₹11,999", 2500], ["Up to 5,000 participants", "₹17,999", 5000], ["Up to 10,000 participants", "₹29,999", 10000]]);
+    expect(rows).toEqual([["Up to 250 players", "₹3,799", 250], ["Up to 750 players", "₹6,299", 750], ["Up to 2,500 players", "₹11,999", 2500], ["Up to 5,000 players", "₹17,999", 5000], ["Up to 10,000 players", "₹29,999", 10000]]);
     expect(more.hasAttribute("open")).toBe(false); // closed while a cup is the chosen size
   });
   test("the trust strip, then Terms and Privacy as plain links: no tick box, no GST line, no money-back promise, none of the forbidden claims", async () => {
@@ -140,11 +140,11 @@ describe("the written pages", () => {
     expect(t).toContain(COPY.headline);
     const cups = [...html.matchAll(/<article class="cup([^"]*)">([\s\S]*?)<\/article>/g)];
     expect(cups.length).toBe(3);
-    expect(cups.map((m) => textOf(m[2]!).trim().match(/^(Most chosen )?(Small|Medium|Large) Up to ([\d,]+) participants (₹[\d,]+)/)!.slice(1, 5))).toEqual([[undefined, "Small", "100", "₹2,999"], ["Most chosen ", "Medium", "500", "₹4,999"], [undefined, "Large", "1,000", "₹7,499"]]);
+    expect(cups.map((m) => textOf(m[2]!).trim().match(/^(Most chosen )?(Small|Medium|Large) Up to ([\d,]+) players (₹[\d,]+)/)!.slice(1, 5))).toEqual([[undefined, "Small", "100", "₹2,872"], ["Most chosen ", "Medium", "500", "₹4,872"], [undefined, "Large", "1,000", "₹7,882"]]);
     expect(cups.map((m) => m[1]!.includes("cup-pop"))).toEqual([false, true, false]);
     for (const m of cups) expect([...m[2]!.matchAll(/<li>([^<]*)<\/li>/g)].map((x) => x[1])).toEqual(COPY.benefits);
     const more = html.match(/<details class="cup-more"><summary>See more sizes<\/summary>([\s\S]*?)<\/details>/)!; expect(more).toBeTruthy();
-    expect([...more[1]!.matchAll(/<td>Up to ([\d,]+) participants<\/td><td class="num">(₹[\d,]+)<\/td><td class="num">US\$ (\d+)<\/td>/g)].map((m) => [m[1], m[2], m[3]])).toEqual([["250", "₹3,799", "51"], ["750", "₹6,299", "84"], ["2,500", "₹11,999", "169"], ["5,000", "₹17,999", "253"], ["10,000", "₹29,999", "421"]]);
+    expect([...more[1]!.matchAll(/<td>Up to ([\d,]+) players<\/td><td class="num">(₹[\d,]+)<\/td><td class="num">US\$ (\d+)<\/td>/g)].map((m) => [m[1], m[2], m[3]])).toEqual([["250", "₹3,799", "51"], ["750", "₹6,299", "84"], ["2,500", "₹11,999", "169"], ["5,000", "₹17,999", "253"], ["10,000", "₹29,999", "421"]]);
     expect([...html.match(/<ul class="cup-trust">([\s\S]*?)<\/ul>/)![1]!.matchAll(/<li>([^<]*)<\/li>/g)].map((x) => x[1])).toEqual(COPY.trust);
     expect(html).toContain('<p class="cup-legal"><a href="/terms.html">Terms</a> &middot; <a href="/privacy.html">Privacy</a></p>');
     expect(html).toContain('href="/cups.css'); expect(existsSync(join(PUB, "cups.css"))).toBe(true);
@@ -157,15 +157,15 @@ describe("the written pages", () => {
   test("brochure.html: the same headline, the three cups, the five other sizes and the trust strip", () => {
     const t = textOf(read("brochure.html"));
     expect(t).toContain(COPY.headline);
-    expect(t).toMatch(/Small Up to 100 guests ₹2,999 Most chosen Medium Up to 500 guests ₹4,999 Large Up to 1,000 guests ₹7,499/i);
+    expect(t).toMatch(/Small Up to 100 guests ₹2,872 Most chosen Medium Up to 500 guests ₹4,872 Large Up to 1,000 guests ₹7,882/i);
     for (const b of COPY.benefits) expect(t).toContain(b);
     expect(t).toContain("More sizes: up to 250 ₹3,799 · up to 750 ₹6,299 · up to 2,500 ₹11,999 · up to 5,000 ₹17,999 · up to 10,000 ₹29,999.");
     expect(t).toContain(COPY.trust.join(" "));
     expect(t).not.toMatch(GAMES_PLAYED_CLAIM); expect(t).not.toMatch(/games played/i); // no games-played count in the brochure (its PDF is read in pdf-assets.test.ts)
   });
-  test("the home page's structured data and the Refer & earn example follow the list (lowest 2,999, highest 29,999, eight sizes; half of 2,999 is 1,499.50)", () => {
-    const idx = read("index.html"); expect(idx).toContain('"lowPrice":"2999","highPrice":"29999","offerCount":"8"');
-    expect(textOf(read("partner.html"))).toContain("a pack for 100 people is ₹2,999: you earn ₹1,499.50 on the first purchase and ₹1,499.50 on each repeat");
+  test("the home page's structured data and the Refer & earn example follow the list (lowest 2,872, highest 29,999, eight sizes; half of 2,872 is 1,436)", () => {
+    const idx = read("index.html"); expect(idx).toContain('"lowPrice":"2872","highPrice":"29999","offerCount":"8"');
+    expect(textOf(read("partner.html"))).toContain("a pack for 100 people is ₹2,872: you earn ₹1,436 on the first purchase and ₹1,436 on each repeat");
   });
 });
 

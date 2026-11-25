@@ -156,6 +156,17 @@ export const claimRuleText = (ties?: string | null): string => ties === "share"
   : ties === "next"
     ? "Rule: a prize goes to a claim made before the next number is called. If several people finish on the same number, they take the next prizes one after the other, in a fixed public order. Unlucky is awarded automatically."
     : "Rule: a prize is won by pressing Claim before the next number is called. Unlucky is awarded automatically.";
+/**
+ * The claim rules for PLAYERS, in a few short lines (owner gap list 2026-11-24): one claim is for one prize; a wrong claim is shown to the player and the game goes on
+ * (two wrong claims for the same prize put that ticket out of that prize, BOGEYS_OUT in game.ts); ties follow the game's REAL tie setting; with no setting, only what is true for every game.
+ */
+export const claimLinesForPlayer = (ties?: string | null): string[] => [
+  "Press Claim before the next number is called. One Claim is for one prize.",
+  "If a claim is not right, you are told at once and the game goes on. Two wrong claims for the same prize put that ticket out of that prize only.",
+  ties === "share" ? "If several players finish on the same number, they share that prize."
+    : ties === "next" ? "If several players finish on the same number, they take the next prizes one after the other, in a fixed public order."
+      : "If several players finish on the same number, the rule set for this game decides who gets which prize.",
+];
 export const PLAYER_TIP = "Tap each number as it is called. When a prize is complete, press Claim before the next number is called. A wrong claim is a Bogey: it does not count.";
 /** A DEMO GAME: a real game on the real server, free, for at most this many people; every screen says DEMO GAME. The organizer can make it a real game (choose a pack and pay) at any time. */
 export const DEMO_CAP = 10;

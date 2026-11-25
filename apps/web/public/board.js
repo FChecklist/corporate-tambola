@@ -1,6 +1,6 @@
-/* Corporate Tambola organizer board: the real-life housie board with every number already called on it. ONLY the Organizer, a Host or a Co-host can open it
+/* Corporate Tambola organizer board: the real-life housie board with every number already called on it. ONLY the Organizer, a Co-organizer or a Co-host can open it
    (the key comes from the console link and is checked with the server). Players never see this board: they see only the number just called.
-   It reads the public numbers and the public count of winners, and never joins the engagement. */
+   It reads the public numbers and the public count of winners, and never joins the game. */
 (function () {
   const ZG = window.ZG;
   const $app = document.getElementById("app");
@@ -31,7 +31,7 @@
       if (S.now === null) { S.err = "Waiting for the clock…"; return; }
       const lv = S.cf && S.cf.live; if (lv && S.info) S.info = { ...S.info, startRound: lv.startRound, callSeconds: lv.callSeconds, callMode: lv.callMode, startMode: lv.startMode }; // a time or mode changed after publishing: this screen follows through the file it already reads
       const cfg = { tickets: S.info.tickets, rewards: S.info.rewards, breaks: S.info.breaks, rounds: S.info.rounds || 1, callMode: S.info.callMode === "host" ? "host" : "auto", startMode: S.info.startMode === "manual" ? "manual" : "auto", keepCalling: S.info.afterPrizes === "keep" };
-      S.st = S.cf ? ZG.resolveControl(ZG.cfgOf(S.cf, ZG.hostGameOf(cfg, S.info.startRound)), S.cf.messages) : null; // host mode: the numbers come when the Host presses
+      S.st = S.cf ? ZG.resolveControl(ZG.cfgOf(S.cf, ZG.hostGameOf(cfg, S.info.startRound)), S.cf.messages) : null; // host mode: the numbers come when the Co-organizer presses
       S.cfg = cfg;
       const stride = S.info.callSeconds / 3;
       let budget = 60;
@@ -78,14 +78,14 @@
     const log = S.locked ? [] : S.logs[S.round] || [];
     if (S.dns) return ($app.innerHTML = `<div class="top"><div class="brand">Corporate Tambola</div></div><div class="big"><h1>This game did not start</h1><p>This game did not start. Your details have been auto-deleted.</p></div><div class="foot">${esc(location.host)}/z?e=${esc(EID)}</div>`); // nobody paid; the time and 20 hours went by
     if (S.cancelled) return ($app.innerHTML = `<div class="top"><div class="brand">Corporate Tambola</div></div><div class="big"><h1>This game was cancelled</h1><p>This game was cancelled by the organizer.</p></div><div class="foot">${esc(location.host)}/z?e=${esc(EID)}</div>`);
-    if (S.locked) return ($app.innerHTML = `<div class="top"><div class="brand">Corporate Tambola</div></div><div class="big"><h1>Waiting for the Organizer or Host</h1><p>Waiting for the Organizer or Host to start the game.</p></div><div class="foot">${esc(location.host)}/z?e=${esc(EID)}</div>`);
+    if (S.locked) return ($app.innerHTML = `<div class="top"><div class="brand">Corporate Tambola</div></div><div class="big"><h1>Waiting for the Organizer or Co-organizer</h1><p>Waiting for the Organizer or Co-organizer to start the game.</p></div><div class="foot">${esc(location.host)}/z?e=${esc(EID)}</div>`);
     const paused = S.st && S.now !== null && S.st.intervals.some((i) => S.now >= i.start && S.now < i.end);
     const hostWait = cfg.callMode === "host" && !paused && S.now !== null && (!S.st || !S.st.nextRounds.length || (S.st.nextRounds[S.st.nextRounds.length - 1] <= S.now && log.length >= S.st.nextRounds.length - 90 * (S.round - 1)));
     const annBar = S.ann ? `<div class="annbar" role="alert">${esc(S.ann.text)}</div>` : "";
     const bd = info.brand && typeof info.brand === "object" ? info.brand : null, bLogo = bd && typeof bd.logo === "string" && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(bd.logo) ? bd.logo : ""; // the organizer's own logo and name, or ours in writing
     const head = `${annBar}<div class="top"><div class="brand">${bLogo ? `<img class="blogo" alt="" src="${esc(bLogo)}">` : ""}${esc(bd && bd.name ? bd.name : "Corporate Tambola")}</div><div class="meta">${cfg.rounds > 1 ? "Round " + S.round + " of " + cfg.rounds + " · " : ""}${ZG.calledLine(log.length)}</div></div>`;
     const wins = (S.results || []).filter((r) => r.round === S.round || r.round === undefined).map((r) => `<span><b>${esc(ORD(r.ordinal || 1))} ${esc(NAMES[r.pattern] || r.pattern)}</b> · ${r.count} winner${r.count === 1 ? "" : "s"}</span>`).join("");
-    if (!log.length && cfg.startMode === "manual" && S.now !== null) { // a game that begins when the Host or Organizer presses Start
+    if (!log.length && cfg.startMode === "manual" && S.now !== null) { // a game that begins when the Co-organizer or Organizer presses Start
       const goR = S.st ? S.st.goRound : null, el = (Date.now() - (S.nowAt || Date.now())) / 1000, toR = (r) => (r - S.now) * 3 - el, joinL = `<p>Open the link on your phone and get your ticket: <b>${esc(location.host)}/z?e=${esc(EID)}</b></p>`;
       if (goR !== null && S.now < goR) return ($app.innerHTML = `${head}<div class="big"><h1>The game is starting</h1><p>The first number is coming.</p><div class="cd">${mmss(toR(goR))}</div>${joinL}</div><div class="foot">Join: ${esc(location.host)}/z?e=${esc(EID)}</div>`);
       if (goR === null && S.now < info.startRound) { const when = new Date((1692803367 + (info.startRound - 1) * 3) * 1000).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }); return ($app.innerHTML = `${head}<div class="big"><p>The game starts at ${esc(when)}, in</p><div class="cd">${hms(toR(info.startRound))}</div><p>The host or organizer presses Start at that time.</p>${joinL}</div><div class="foot">Join: ${esc(location.host)}/z?e=${esc(EID)}</div>`); }
@@ -107,7 +107,7 @@
   }
 
 
-  // ---------- the live panels under the board: story, quiet timer, controls, people, claims, averages, the whole log (Organizer, Host; a Co-host sees them without the controls) ----------
+  // ---------- the live panels under the board: story, quiet timer, controls, people, claims, averages, the whole log (Organizer, Co-organizer; a Co-host sees them without the controls) ----------
   const P = { gl: null, claims: [], tooLate: [], who: null, busy: false, note: "", sig: "" };
   const hm = (ms) => new Date(ms).toLocaleTimeString("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
   async function pollPanels() {
@@ -135,7 +135,7 @@
     else if (!log.length) { const left = S.now === null ? null : ((manual ? go : sr + ZG.GRACE_ROUNDS) - S.now) * 3; state = left !== null && left > 0 && left <= 300 ? "countdown" : "waiting"; }
     else state = "running";
     const left0 = S.now === null ? 0 : ((manual ? go || sr : sr + ZG.GRACE_ROUNDS) - S.now) * 3;
-    return { state, ...ZG.story({ state, role: P.who === "host" ? "host" : P.who === "cohost" ? "cohost" : "organizer", called: prizesDone ? Math.max(0, ...(S.results || []).filter((x) => Number.isInteger(x.idx)).map((x) => x.idx + 2)) : log.length, manual, time: ZG.dayTimeIst((1692803367 + (sr - 1) * 3) * 1000), countdown: ZG.mmss(left0), by: pm && S.cf.by && S.cf.by[pm.seq - 1] === "Host" ? "a Host" : "the Organizer" }) };
+    return { state, ...ZG.story({ state, role: P.who === "host" ? "host" : P.who === "cohost" ? "cohost" : "organizer", called: prizesDone ? Math.max(0, ...(S.results || []).filter((x) => Number.isInteger(x.idx)).map((x) => x.idx + 2)) : log.length, manual, time: ZG.dayTimeIst((1692803367 + (sr - 1) * 3) * 1000), countdown: ZG.mmss(left0), by: pm && S.cf.by && S.cf.by[pm.seq - 1] === "Host" ? "a Co-organizer" : "the Organizer" }) };
   }
   function quietNext() {
     if ((S.cfg || {}).callMode === "host") return (S.logs[S.round] || []).length >= 90 || pausedNowB() ? "" : "The host calls the numbers"; // no gap to count: the host sets the pace
@@ -146,7 +146,7 @@
   }
   const calls = () => { const log = S.logs[S.round] || [], sc = (S.sched && S.sched[S.round]) || [], manual = (S.cfg || {}).callMode === "host"; return log.map((n, k) => ({ n, k: k + 1, ms: sc[k] != null && Number.isFinite(sc[k]) ? ZG.roundTimeMs(sc[k]) : null, manual })).filter((c) => c.ms !== null); };
   function events() { // plain proof lines: what happened, then the exact time (India time, with seconds). Newest first.
-    const ev = [], who = (i) => (S.cf && S.cf.by && S.cf.by[i] === "Host" ? "a Host" : "the Organizer");
+    const ev = [], who = (i) => (S.cf && S.cf.by && S.cf.by[i] === "Host" ? "a Co-organizer" : "the Organizer");
     const cs = calls();
     for (const c of cs) ev.push({ ms: c.ms, t: `Number <b>${c.n}</b> announced`, tail: ` \u00b7 ${ZG.calledLine(c.k)}` });
     for (const c of P.claims) ev.push({ ms: c.atMs, t: `Ticket ${seatOf(c.pid)} claimed ${esc(NAMES[c.pattern] || c.pattern)}${c.bogey ? "" : " after number " + (c.idx + 1)},`, tail: c.bogey ? " wrong (a Bogey)" : " accepted" });
@@ -158,7 +158,7 @@
     }
     if (S.cf) (S.cf.messages || []).forEach((m, i) => { const txt = { go: "Start pressed", pause: "Paused", resume: "Resumed", extend: "Pause made longer", stop: "Game ended", next: "Next number pressed" }[m.action]; if (txt) ev.push({ ms: ZG.roundTimeMs(m.atBeaconRound), t: `${txt}`, tail: ` by ${who(i)}`, ctl: true }); });
     // the control lines are also in the plain list of changes: show each once
-    const seenCtl = new Set(); const out = ev.filter((e) => { if (!e.ctl) return !/^(The Organizer|A Host): (Start was pressed|The game was (paused|resumed|ended)|The pause was made longer)$/.test(e.t.replace(/<[^>]*>/g, "")); const k = e.t + Math.round(e.ms / 1000); if (seenCtl.has(k)) return false; seenCtl.add(k); return true; });
+    const seenCtl = new Set(); const out = ev.filter((e) => { if (!e.ctl) return !/^(The Organizer|A Co-organizer): (Start was pressed|The game was (paused|resumed|ended)|The pause was made longer)$/.test(e.t.replace(/<[^>]*>/g, "")); const k = e.t + Math.round(e.ms / 1000); if (seenCtl.has(k)) return false; seenCtl.add(k); return true; });
     return out.sort((a, b) => b.ms - a.ms); // every line, newest first (nothing is cut)
   }
   /** one line at the top of the log: how many numbers were announced, and whether any was missed (worked out from the log against the schedule) */
@@ -168,7 +168,7 @@
   }
   const seatOf = (pid) => { const m = /^(\d+)x/.exec(String(pid)); return m ? m[1] : "?"; };
   function controlsHtml() {
-    if (P.who !== "master" && P.who !== "host" && P.who !== "platform") return `<div class="bpbox" id="bp-controls"><h2>Controls</h2><p class="bpsmall">Pause, Resume and Next number are pressed by the Organizer or a Host.</p></div>`;
+    if (P.who !== "master" && P.who !== "host" && P.who !== "platform") return `<div class="bpbox" id="bp-controls"><h2>Controls</h2><p class="bpsmall">Pause, Resume and Next number are pressed by the Organizer or a Co-organizer.</p></div>`;
     const paused = pausedNowB(), manual = (S.cfg || {}).startMode === "manual", go = S.st ? S.st.goRound : null, host = (S.cfg || {}).callMode === "host", running = (S.logs[S.round] || []).length > 0 && (S.logs[S.round] || []).length < 90;
     const off = P.busy ? " disabled" : "", startOnly = !!(S.cf && S.cf.startOnly) && !host; // above 2,000 people only a game the software calls loses Pause (a Host-called game keeps its controls)
     return `<div class="bpbox" id="bp-controls"><h2>Controls</h2>${startOnly ? `<p class="bpsmall" id="bp-nopause">No pause on games above 2,000 people: the numbers keep coming at their own pace.</p>` : ""}<div class="bpbtns">
@@ -228,7 +228,7 @@
   let KEY = ""; try { const m = /(?:^|[#&])k=([^&]+)/.exec(location.hash || ""); if (m) { KEY = decodeURIComponent(m[1]); sessionStorage.setItem("ctz-board-" + EID, KEY); history.replaceState(null, "", location.pathname + location.search); } else KEY = sessionStorage.getItem("ctz-board-" + EID) || ""; } catch {}
   const checkKey = () => (KEY ? fetch(`/api/z/${EID}/cohost`, { headers: { "x-organizer": KEY }, cache: "no-store" }).then((r) => r.ok).catch(() => false) : Promise.resolve(false));
   checkKey().then((allowed) => {
-    if (!allowed) { $app.innerHTML = `<main class="big"><h1>This board is for the Organizer</h1><p>The board with all the numbers is only for the Organizer, a Host or a Co-host. Players see only the number just called.</p><p>Please open it from your console: Game day, then Open my board.</p></main>`; return; }
+    if (!allowed) { $app.innerHTML = `<main class="big"><h1>This board is for the Organizer</h1><p>The board with all the numbers is only for the Organizer, a Co-organizer or a Co-host. Players see only the number just called.</p><p>Please open it from your console: Game day, then Open my board.</p></main>`; return; }
     const loop = async () => { await tick(); draw(); drawPanels(); };
     loop(); setInterval(loop, 3000);
     pollPanels().then(() => drawPanels()); setInterval(async () => { await pollPanels(); drawPanels(); }, 5000);

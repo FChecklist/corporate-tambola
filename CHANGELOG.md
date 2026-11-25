@@ -2,6 +2,44 @@
 
 Newest first. The owner-only release list the site reads is `apps/edge/src/releases.json`; this file adds the PR and audit lines the version standard asks for (marketing-ledger/plans/VERSION-AND-KNOWLEDGE-STANDARD-2026-11-20.md). Earlier releases (1.0.0 to 1.9.0) are in `releases.json`.
 
+## 1.12.1 - 2026-11-25
+The owner's gap list on top of 1.12.0 (stacked on PR #39, branch `p1/pricing-three-cups-2026-11-24`). Not deployed and not merged. Needs two independent audits on the exact head commit before any deploy. The money flags stay off and no payment code is touched.
+### What changed, in plain English
+- **The owner's three prices (23 Nov 2026).** Small (up to 100 players) Rs 2,872, Medium (up to 500) Rs 4,872 ("Most chosen"), Large (up to 1,000) Rs 7,882, in ONE constant: `CUP_PRICES` in `packages/shared/src/pricing.ts` (browser copy `TB.CUP_PRICES` in `common.js`; a test keeps them equal and the cups read it). PR #39's title and the 1.12.0 notes say 2,999 / 4,999 / 7,499: those are the older numbers and are replaced. The other five sizes (250, 750, 2,500, 5,000, 10,000) were not named by the owner and are unchanged. Money that follows from a price (the partner's half, 1,436 and 2,436) was recalculated.
+- **Wording.** "Game" for engagement, "player" for participant, "Co-organizer" for Host, on the home, price, brochure, about and Refer and earn pages and in the Housie screens (organizer flow, console, phone). "Pay now" is the one payment button label. The payment gateway's name is gone from the marketing pages; payments are named once: IT Services by Rajat Agarwal, through Moneypenny credits (the plain payee name `PAYEE_NAME` sits beside the payee record `PAYEE`).
+- **Claim rules for players.** Three short lines (`claimLinesForPlayer`): one Claim is for one prize; a wrong claim is shown and the game goes on, two wrong claims for the same prize put that ticket out of that prize only; ties follow the game's real setting (next prizes one after the other, or share).
+- **Brochure.** `brochure.html` and the rebuilt `brochure.pdf` show the three new prices.
+- **Prize houses.** The prize step shows the five usual prizes first; the other houses sit behind "More options" (nothing removed).
+- **Organizer.** A claims queue and a wrong-claim view on Game day (`claimsQueue`). Pause: the page says phones show "Paused" as fast as the design allows and that a pause ends by itself after 30 minutes if nobody presses Resume.
+- **AI help.** The AI manual, `llms.txt` and the AI page name the payee and Moneypenny credits and say the AI may prepare the pre-game and winner messages but may not pay (checkout accepts only organizer and co-organizer keys; the AI key starts with `cta_`).
+- **Phones renew their saved copy:** `zsw.js` cache `ct-game-v48` to `ct-game-v49`.
+### Decisions the owner should look at
+- **"The game ends by itself after 30 minutes without activity" is not what the code does.** What exists is a PAUSE that ends by itself after 30 minutes (the numbers then start again). There is no rule that ends an idle game. The pages say only what the code does. If the owner wants the idle end, it is a new feature.
+- **"Co-host" is a separate, older role and was left as it is.** Only "Host" became "Co-organizer"; two similar names may confuse people. Needs an owner decision.
+- **"Moneypenny credits"** is named as the owner worded it; no other page or code describes it yet, and the payment page itself still names the gateway (it is a payment page, not marketing).
+- **The rule "never my / your" in user text** was applied to the new lines only. The existing pages use "your" widely; a whole-site pass is a separate job.
+- **Legal pages** (Terms, Privacy, Trust, Legal position) still say "Host" and, where a processor must be named, the payment gateway: they were not reworded (legal text; owner decision). The brochure PDF was rebuilt with `tools/make-brochure.mjs` and shows the new prices.
+### Tests
+- New: `apps/web/test/gap-fixes-1-12-1.test.ts`, one group per item (a to f).
+- Changed to the new prices: every test and simulator expectation that named 2,999 / 4,999 / 7,499 or the half of 2,999 and 4,999.
+- `release-1-12-0.test.ts` now finds 1.12.0 in the list (newer releases may sit above it).
+### After the first audit round (26 Nov 2026)
+Eleven chunk audits and two final-state checks read this release (all on Sonnet 5.5, read only); the boss judged every finding. Fixed:
+- `beacon.test.ts`: the price search-and-replace had turned the millisecond offset `+ 2999` into `+ 2872` (not a price); restored, so the 3,000 ms round edge is tested again.
+- `pages.test.ts`: the test title said "no 'game'"; restored to "no 'engagement'" (the check itself was right).
+- `wp06-price-footer.test.ts`: the footer check now fails when the `ufpay` block is missing instead of passing on an empty match; the title says what it checks.
+- Console: "Automatic + host speaks" and "AI voice + host speaks" now say "Co-organizer speaks"; the message to a new Co-organizer says "players", not "participants". The claims queue shows "Being checked" when a status is unknown, never "undefined".
+- AI manual (`ai-link.ts`): the tie rule is told (the game's own setting: next prizes one after the other, or share); the payment line says a credit left from a cancelled game is a separate thing from Moneypenny credits. Measured manual length 38,585 characters against the 39,000 guard.
+- Pages: the partner page's static example shows the partner's half of a Large game (3,941), not the full price; a new test pins 1,436 and 3,941 and none of the older halves. Home page: "Designed for company employees and their extended families" (test follows), the data answer names the Co-organizers, not the host; the price page intro lost "(one game)".
+Judged and left on purpose (known limits, written here so they are not raised again as new):
+- Existing "host" words on the phone, the big screen, the board and the story line ("Waiting for the host", "Paused by the host", "The host calls the numbers", `whoLines` "Host:", the step name "Make hosts and co-hosts") are asserted by about twenty older tests and simulators and are the role that calls the numbers; a whole-site wording pass is an owner decision.
+- The pasted AI instructions keep "Host" as the helper role (the AI notes are not in this release's wording list); the API role value `host` is unchanged.
+- The tick boxes of the old consent and start sheets (`roleConsent`, `ck1`, `ck2`) are older lines, not new ones; whether an organizer confirmation counts as a tick box under the owner's rule is an owner decision.
+- The payment screens (`common.js` `payBrand`, `payReceipt`, `pay.js`, the checkout sheet in `site.js`) still name the gateway: they are payment pages, not marketing pages (see above).
+- The brochure cups say "guests" (the PDF needs a rebuild to change them; `pdf-assets.test.ts` pins the words). The US$ figures on the price page (34 / 67 / 101) were not recalculated: the owner has named rupee prices only.
+- Prices on `pricing.html`, `index.html` and the fallback in `zc.js` are written in the pages; they are pinned by `pricing-cups.test.ts` (literal expectations) and the one constant is mirrored by test, not generated.
+- The "More options" prize houses, the 30-minute pause wording and "an AI key cannot pay" are covered by `gap-fixes-1-12-1.test.ts` (c, b) and `param-money.test.ts` / `usecases.test.ts`; a missing `count` in a claim result keeps the old display rule (display only; the software still decides).
+
 ## 1.12.0 - 2026-11-24
 New prices with three cups, on top of 1.11.2 (master `6d38283`). Not deployed and not merged. Needs two independent audits on the exact head commit before any deploy. 1.11.0 is the live release (commit `8a4a0bed`); 1.11.1 and 1.11.2 are merged into master but not deployed, so a deploy of this release also ships them. The money flags stay off and no payment code is touched; payments are still taken only by IT Services by Rajat Agarwal through Razorpay.
 ### What changed, in plain English

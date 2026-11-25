@@ -44,7 +44,7 @@ afterEach(() => { globalThis.fetch = realFetch; });
 
 let ip = 0, lastAi = "";
 const start = async (email: string) => { const r = await j(await handle(new Request("http://x/api/start", { method: "POST", headers: { "content-type": "application/json", "cf-connecting-ip": `9.9.9.${++ip}` }, body: JSON.stringify({ email }) }), env as Env, T)); lastAi = r.aiKey as string; return r.token as string; };
-/** Organizer + a Host (own e-mail) + a Co-host for game GAME-1 (300 places = the 500 pack, Rs 4,999, no GST), starting 3 hours after T. */
+/** Organizer + a Host (own e-mail) + a Co-host for game GAME-1 (300 places = the 500 pack, Rs 4,872, no GST), starting 3 hours after T. */
 const team = async () => {
   const master = await start("boss@acme.com"); const ai = lastAi;
   await game(master, "GAME-1", 300, T + 3 * H);
@@ -63,7 +63,7 @@ const paidWithMoney = async (key: string, eid: string, now = T) => { const c = a
 const cancelIt = (key: string, eid: string, now = T) => call("POST", `/api/z/${eid}/cancel`, { confirmations: 3 }, key, now);
 const withCredit = (key: string | undefined, eid: string, now = T, body: unknown = {}) => call("POST", `/api/z/${eid}/pay-with-credit`, body, key, now);
 const credits = async (key: string, now = T) => j(await call("GET", "/api/org/credit", undefined, key, now));
-const paidOf = (cap: number) => ({ 100: 2999, 250: 3799, 300: 4999, 750: 6299 } as Record<number, number>)[cap]!;
+const paidOf = (cap: number) => ({ 100: 2872, 250: 3799, 300: 4872, 750: 6299 } as Record<number, number>)[cap]!;
 
 
 // 20 Nov 2026 (owner): the Organizer's limited AI key (cta_) may MAKE the pay link (POST /api/z/{id}/paylink). It pays nothing: a person opens the link and pays. Every other AI limit stays.

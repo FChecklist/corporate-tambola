@@ -7,12 +7,17 @@
  * and GST (18%) is added ON TOP of these prices (review the prices first).
  *
  * Owner pricing update 2026-11-23 (the boss's ladder: "Rs 2,500 to open a game + Rs 5 per player place, charm endings"), three cups for every game and console:
- * Small up to 100 = Rs 2,999, Medium up to 500 = Rs 4,999 (shown as "Most chosen"), Large up to 1,000 = Rs 7,499. More sizes sit behind "See more sizes":
+ * Small up to 100 = Rs 2,872, Medium up to 500 = Rs 4,872 (shown as "Most chosen"), Large up to 1,000 = Rs 7,882. More sizes sit behind "See more sizes":
  * 250 = 3,799, 750 = 6,299, 2,500 = 11,999, 5,000 = 17,999, 10,000 = 29,999. The US dollar column was not part of that decision and is unchanged.
  * Before 2026-11-23 the INR prices were 2,399 / 3,499 / 4,699 / 5,899 / 7,099 / 11,799 / 17,699 / 29,499.
  */
+/**
+ * THE ONE CONFIG CONSTANT FOR THE THREE CUP PRICES (INR). Owner decision 2026-11-23, as restated 2026-11-25: Small (100 players) 2,872, Medium (500) 4,872, Large (1,000) 7,882.
+ * PR #39's title said 2,999 / 4,999 / 7,499; the owner's numbers here win. Browser copy: `TB.CUP_PRICES` in common.js (a test keeps them equal).
+ */
+export const CUP_PRICES = { small: 2872, medium: 4872, large: 7882 } as const;
 export const PACKS: ReadonlyArray<readonly [number, number, number]> = [
-  [100, 2999, 34], [250, 3799, 51], [500, 4999, 67], [750, 6299, 84], [1000, 7499, 101], [2500, 11999, 169], [5000, 17999, 253], [10000, 29999, 421],
+  [100, CUP_PRICES.small, 34], [250, 3799, 51], [500, CUP_PRICES.medium, 67], [750, 6299, 84], [1000, CUP_PRICES.large, 101], [2500, 11999, 169], [5000, 17999, 253], [10000, 29999, 421],
 ];
 /** The three cups shown first, everywhere (home page, price page, brochure, console). `upTo` must be a size in PACKS; every other size is behind "See more sizes". */
 export const CUPS: ReadonlyArray<{ readonly key: "small" | "medium" | "large"; readonly name: string; readonly upTo: number; readonly mostChosen: boolean }> = [
