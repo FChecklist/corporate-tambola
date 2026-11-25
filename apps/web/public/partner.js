@@ -1,5 +1,5 @@
 /* Corporate Tambola, Refer & earn. A sales partner's reference code is a random 8-character code; their unique link is /?ref=<code>.
-   Anyone may join (a participant from their ticket, or anyone from this page). Nothing is shown to anyone but the partner themselves. */
+   Anyone may join (a player from their ticket, or anyone from this page). Nothing is shown to anyone but the partner themselves. */
 (function () {
   const $app = document.getElementById("app"), $dash = document.getElementById("dash");
   const q = new URLSearchParams(location.search);
@@ -17,7 +17,7 @@
   const S = { linkToken: (/^[0-9a-f]{48}$/.test(q.get("t") || "") ? q.get("t") : ""), note: "", err: "", me: null, fresh: null , f: { ph: "", em: "", nm: "" }};
 
   function shareBlock(code, link) {
-    const text = "Corporate Tambola makes your company engagement unforgettable. Take a look: " + link;
+    const text = "Corporate Tambola makes your company game unforgettable. Take a look: " + link;
     return `<div class="zlink" id="mylink">${esc(link)}</div>
       <p class="zsmall">Your code: <b>${esc(code)}</b>. Anyone who buys through your link is counted for you.</p>
       <button class="zbtn s" id="copy">Copy my link</button> <button class="zbtn s alt" id="nshare" style="display:none">Share&hellip;</button>
@@ -81,7 +81,7 @@
   function draw(v, dash) { document.body.classList.toggle("signed", !!dash); (dash ? $dash : $app).innerHTML = v; if (dash) $app.innerHTML = ""; bind(); }
   function bind() {
     const $ = (id) => document.getElementById(id);
-    if ($("nshare") && navigator.share) { $("nshare").style.display = ""; $("nshare").onclick = () => navigator.share({ title: "Corporate Tambola", text: "Corporate Tambola makes your company engagement unforgettable. Take a look:", url: document.getElementById("mylink").textContent }).catch(() => {}); }
+    if ($("nshare") && navigator.share) { $("nshare").style.display = ""; $("nshare").onclick = () => navigator.share({ title: "Corporate Tambola", text: "Corporate Tambola makes your company game unforgettable. Take a look:", url: document.getElementById("mylink").textContent }).catch(() => {}); }
     if ($("copy")) $("copy").onclick = () => { try { navigator.clipboard.writeText(document.getElementById("mylink").textContent); $("copy").textContent = "Copied"; } catch {} };
     if ($("join")) $("join").onclick = async () => {
       S.err = ""; rememberForm();

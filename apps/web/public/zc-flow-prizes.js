@@ -71,9 +71,9 @@
     if (!S.count) S.count = P.DEFAULT_COUNT[S.tickets];
     const msg = el("p", { class: "zf-msg", role: "status", id: "zp-msg", text: S.note });
     box.append(el("h2", { class: "zp-h", text: "Prizes for your team" }));
-    // how many tickets each participant holds
-    const tx = el("div", { class: "zf-chips", role: "radiogroup", "aria-label": "Tickets per participant" });
-    for (const n of [1, 2]) tx.append(el("button", { type: "button", role: "radio", class: "zf-chip" + (S.tickets === n ? " on" : ""), "aria-checked": String(S.tickets === n), "data-tix": String(n), onclick: () => { S.tickets = n; S.count = P.DEFAULT_COUNT[n]; S.manual = []; ctx.redraw(); } }, n + (n === 1 ? " ticket" : " tickets") + " for each participant"));
+    // how many tickets each player holds
+    const tx = el("div", { class: "zf-chips", role: "radiogroup", "aria-label": "Tickets per player" });
+    for (const n of [1, 2]) tx.append(el("button", { type: "button", role: "radio", class: "zf-chip" + (S.tickets === n ? " on" : ""), "aria-checked": String(S.tickets === n), "data-tix": String(n), onclick: () => { S.tickets = n; S.count = P.DEFAULT_COUNT[n]; S.manual = []; ctx.redraw(); } }, n + (n === 1 ? " ticket" : " tickets") + " for each player"));
     box.append(tx);
     // the two cards
     const cards = el("div", { class: "zf-cards", role: "radiogroup", "aria-label": "How to plan the prizes" });
