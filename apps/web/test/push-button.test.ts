@@ -1,7 +1,6 @@
 // Game alerts, the player page (1.13.0): the "Yes, notify me when this game begins" button, DARK until one setting is filled in. Tests use a fake push service and a fake browser; nothing real is called.
-// FALSIFIED BY (each one was put in, the test failed, then it was taken out again): push-boot.js drawing the block while PUSH_API is empty, the prompt opened on page load, Stop hidden, the
-// admin-less /subscribe body carrying an extra field, a changed byte in any of the three client files, zsw.js without stopImmediatePropagation (a news click opened a second window),
-// connect-src naming the service while dark, script-src changed.
+// FALSIFIED BY (each one was put in by hand, the test went red, then it was taken out again): an address set in push-boot.js (the dark tests, 16 red), a changed byte in a client file,
+// zsw.js without stopImmediatePropagation (a news click opened a second window), z.js without the game-over signal, the player page's connect-src naming the service while dark.
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
@@ -183,7 +182,7 @@ describe("the service worker: the service's push and click handlers are in, the 
     await s.click("/news"); expect(s.navigated).toEqual(["/news"]);
   });
   test("the saved copy's name moved on, and the snippet is imported after the news handler (the order the click rule needs)", () => {
-    const z = text("zsw.js"); expect(Number(/const CACHE = "ct-game-v(\d+)"/.exec(z)![1])).toBeGreaterThanOrEqual(48);
+    const z = text("zsw.js"); expect(Number(/const CACHE = "ct-game-v(\d+)"/.exec(z)![1])).toBeGreaterThanOrEqual(49);
     expect(z.indexOf('self.addEventListener("notificationclick"')).toBeLessThan(z.indexOf('importScripts("/sw-push-snippet.js")'));
     expect(z).toContain("e.stopImmediatePropagation()");
   });
@@ -210,5 +209,24 @@ describe("the build: the files ship, and the page's connection rule names the se
     const z = rule("/z"), preview = rule("/preview");
     expect(z).toContain("script-src 'self' https://static.cloudflareinsights.com;"); expect(z).not.toContain("push");
     expect(z.match(/Content-Security-Policy: (.*)/)![1]).toBe(preview.match(/Content-Security-Policy: (.*)/)![1]); // dark: the player page's rule is the game rule it always was
+  });
+});
+
+describe("the privacy words say what is true about the alert", () => {
+  const plain = (h: string) => h.replace(/<[^>]+>/g, " ").replace(/&rsquo;/g, "'").replace(/&ldquo;|&rdquo;/g, '"').replace(/\s+/g, " ");
+  for (const [label, file] of [["the privacy page", join(PUB, "privacy.html")], ["the privacy page's source fragment (tools/legal)", join(ROOT, "tools/legal/privacy.frag.html")]] as const) {
+    test(`${label}: a browser address and not the name, e-mail or phone; deleted with the game within 24 hours; never 'not personal data'`, () => {
+      const t = plain(readFileSync(file, "utf8"));
+      expect(t).toContain("a browser address, not your name, e-mail or phone");
+      expect(t).toContain("deleted with the game, within 24 hours");
+      expect(t).toContain("Yes, notify me when this game begins");
+      expect(t).toContain("Stop");
+      expect(t.toLowerCase()).not.toContain("not personal data");
+    });
+  }
+  test("the privacy page still sends the visitor on to the one document (the words above are added, nothing is taken away)", () => {
+    const h = text("privacy.html");
+    expect(h).toContain('http-equiv="refresh" content="0; url=/terms.html#privacy"');
+    expect(h).toContain('href="/terms.html#privacy"');
   });
 });

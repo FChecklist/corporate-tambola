@@ -1,5 +1,20 @@
 [
   {
+    "version": "1.13.0",
+    "date": "2026-11-25",
+    "releasedAtIST": "25 Nov 2026, time set at deploy",
+    "commit": "this release",
+    "title": "A player can ask to be told when the game begins: the button, the alert and the clean-up are built, and all of it stays switched off until the owner fills in the notification service's address and key",
+    "changes": [
+      "The player page can show a button, 'Yes, notify me when this game begins'. The browser's permission question comes only after the player taps it, and a Stop button is always there. Until one address is filled in, nothing is drawn, loaded or asked for: the page is exactly as it was",
+      "When switched on, ONE alert is sent per game, at the moment the first number is called (a game its Host starts by hand is announced when the Host really starts it). A game that began more than 30 minutes ago is never announced, and a failed first try is repeated for 10 minutes only",
+      "Whenever a game's participant data is deleted (the organizer's own delete, the 20-hour job, a cancelled or never-played game, the 365-day clean-up) the notification service is told to delete that game's saved browser addresses too. A request that fails is repeated for 3 days; the service's own 24-hour limit is the last backstop",
+      "Nothing is sent and nothing is asked of the service unless BOTH settings (its address and its admin key) are set. The key travels only in the header of the call: never in the database, in an answer or in the log",
+      "The privacy words say that only a browser address is kept, not a name, e-mail or phone, and that it is deleted with the game, within 24 hours. The one terms document was not edited: that is the owner's decision (see the knowledge page)",
+      "The saved copies of the game page on phones are renewed so that they get the button's code"
+    ]
+  },
+  {
     "version": "1.11.2",
     "date": "2026-11-21",
     "releasedAtIST": "21 Nov 2026, time set at deploy",
