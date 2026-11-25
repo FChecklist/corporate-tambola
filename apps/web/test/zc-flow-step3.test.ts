@@ -25,7 +25,10 @@ test("the prize list is the game's real houses (Super Bumper has its own place),
   const ids = [...win.document.querySelectorAll("#zf-sec3 [data-house]")].map((n: any) => n.dataset.house);
   const real = PRIZE_HOUSES.filter((h) => h.id !== "full2").map((h) => h.id);
   // Unlucky sits under "More prizes", after the others, and the Lucky draw comes last
-  expect(ids).toEqual([...real.filter((x) => x !== "unlucky"), "unlucky", "lucky"]);
+  // 1.12.1: the five recommended houses come first, every other house sits behind "More options" (still in the list), then Unlucky and the Lucky draw
+  expect(ids.slice(0, 5)).toEqual(["early5", "top", "mid", "bot", "full"]);
+  expect([...ids].sort()).toEqual([...real, "lucky"].sort());
+  expect(ids.slice(-2)).toEqual(["unlucky", "lucky"]);
   expect(win.document.getElementById("zf-tick-full").checked).toBe(true);
   expect(win.document.getElementById("zf-tick-plus").checked).toBe(false);
 });

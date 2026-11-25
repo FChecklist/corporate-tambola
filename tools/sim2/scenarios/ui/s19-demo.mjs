@@ -212,7 +212,7 @@ export default [
       const x = await t.open({ device: "mobile", token: org.token }); const P = x.page;
       await P.goto(`${H.SIM}/pay.html?e=${g.id}&pack=100`); await P.waitForSelector("#paygo", { timeout: 15000 });
       await P.click('[data-pack="500"]'); await P.waitForTimeout(400);
-      t.check("S19-08a: another pack can be picked on the page and the amount follows", /Up to 500/.test(await t.text(P, ".pgame")) && /4,699/.test(await t.text(P, "#paygo")), await t.text(P, "#paygo"));
+      t.check("S19-08a: another pack can be picked on the page and the amount follows", /Up to 500/.test(await t.text(P, ".pgame")) && /4,872/.test(await t.text(P, "#paygo")), await t.text(P, "#paygo"));
       await payOnPage(P, { email: org.email });
       await P.waitForFunction(() => /PAYMENT RECEIVED/i.test(document.body.innerText), null, { timeout: 15000 });
       const done = await t.text(P);

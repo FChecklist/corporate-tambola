@@ -1,4 +1,4 @@
-// New organizer flow, late additions (2026-10-29): Game ID bar and the 11 statuses, the participant preview in step 5, Host / Co-host sign-in and pages (demo stub), A/B prize rows waiting, ₹ everywhere.
+// New organizer flow, late additions (2026-10-29): Game ID bar and the 11 statuses, the player preview in step 5, Co-organizer / Co-host sign-in and pages (demo stub), A/B prize rows waiting, ₹ everywhere.
 // FALSIFIED BY: flow-t-status-paid-after-start, flow-t-status-overdue-locked, flow-t-status-cancelled-refund, flow-t-status-deleted-first, flow-t-gameid-bar-missing, flow-t-demo-box-live, flow-t-preview-fake-tickets, flow-t-preview-two-tickets, flow-t-stub-live-host, flow-t-passcode-tries, flow-t-passcode-expiry, flow-t-cohost-sees-payment, flow-t-ab-enabled, flow-t-rs-sign
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
@@ -96,7 +96,7 @@ function toStep5(win: any) {
 test("step 5 preview: the game's own ticket maker, mobile and laptop, sample words, prizes with Claim", async () => {
   const win = page("?flow=new"); toStep5(win);
   const d = win.document;
-  expect(d.getElementById("zf-pvnote").textContent).toBe("These are sample numbers. Your participants see their own tickets.");
+  expect(d.getElementById("zf-pvnote").textContent).toBe("These are sample numbers. Your players see their own tickets.");
   expect(d.querySelectorAll("#zf-preview .zf-pvticket").length).toBe(1);
   const real = ticketsFor("EABCDEF", "sample-player", 1)[0].flat().filter((v: any) => v !== null).map(String);
   const shown = [...d.querySelectorAll("#zf-preview .zf-pvticket div:not(.e)")].map((n: any) => n.textContent);
@@ -139,9 +139,9 @@ test("step 3 with 2 tickets shows no Ticket A / Ticket B prize rows (hidden: the
 test("the money sign is ₹ on every step: no 'Rs' anywhere on the screens", () => {
   const win = page("?flow=new"); const F = win.ZFLOW;
   F.state.done[1] = F.state.done[2] = F.state.done[3] = F.state.done[4] = true; F.who.upTo = 100; F.prizes.sel = F.defaultPrizes(F.housesOf({ PRIZE_HOUSES }));
-  F.state.packs = [{ upTo: 100, inr: 2399 }];
+  F.state.packs = [{ upTo: 100, inr: 2872 }];
   let all = "";
   for (let n = 1; n <= 5; n++) { F.state.open = n; F.state.eid = "EABCDEF"; F.draw(); all += win.document.getElementById("app").textContent + " "; }
   expect(/\bRs\b/.test(all)).toBe(false);
-  expect(all).toContain("₹2,399");
+  expect(all).toContain("₹2,872");
 });

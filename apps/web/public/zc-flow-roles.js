@@ -1,9 +1,9 @@
 /* Corporate Tambola only (?flow=new): who lets whom in. Pure rules from the owner's note 29, written once and used for the words on every role's screen.
-   The engine decides the real outcome; Hosts, Co-host approval and family approval that it cannot do yet are not drawn (see handover 194). */
+   The engine decides the real outcome; Co-organizers, Co-host approval and family approval that it cannot do yet are not drawn (see handover 194). */
 (() => {
   const FAMILY_CUTOFF_MIN = 15, WAIT_LIMIT_MIN = 30;
   /** The people who may let someone in, by the link that person used. */
-  const approvers = (link) => (link === "family" ? ["family host"] : link === "cohost" ? ["Co-host", "Host", "organizer"] : ["Host", "organizer"]);
+  const approvers = (link) => (link === "family" ? ["family host"] : link === "cohost" ? ["Co-host", "Co-organizer", "organizer"] : ["Co-organizer", "organizer"]);
   /**
    * What happens when a person opens the game link.
    * sc: link (open | listed | family | cohost | host), validation (system | manual), onList, family (card 2 on), pay (pending | paid | free), minutesToStart, capFull.
@@ -25,11 +25,11 @@
   }
   /** The plain sentence a role reads about who lets people in. */
   function approvalText(role) {
-    // only what the engine does today: people who join with the game link wait for the organizer or a Host. Co-host and family approval are not in the engine, so no sentence promises them.
-    return role === "cohost" ? "" : role === "host" ? "People who join with the game link, a Host link or the organizer link wait for you or the organizer." : "People who join with the game link wait for you or a Host.";
+    // only what the engine does today: people who join with the game link wait for the organizer or a Co-organizer. Co-host and family approval are not in the engine, so no sentence promises them.
+    return role === "cohost" ? "" : role === "host" ? "People who join with the game link, a Co-organizer link or the organizer link wait for you or the organizer." : "People who join with the game link wait for you or a Co-organizer.";
   }
   /** May this role let a waiting person in? (the approvers of that request include the role) */
-  const LABEL = { organizer: "organizer", host: "Host", cohost: "Co-host", familyhost: "family host" };
+  const LABEL = { organizer: "organizer", host: "Co-organizer", cohost: "Co-host", familyhost: "family host" };
   const canLetIn = (role, approverList) => approverList.indexOf(LABEL[role]) >= 0;
   window.ZROLES = { canLetIn, FAMILY_CUTOFF_MIN, WAIT_LIMIT_MIN, approvers, decide, approvalText };
 })();

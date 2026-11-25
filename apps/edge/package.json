@@ -1,1 +1,1 @@
-{ "name": "@tambola/edge", "version": "0.1.0", "type": "module", "main": "src/worker.ts" }
+{ "name": "@tambola/edge", "version": "1.12.1", "type": "module", "main": "src/worker.ts" }

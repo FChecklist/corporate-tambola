@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   normalize, generateTicket, isValidTicket, ticketNumbers, patternNumbers, spokenPhrase, numberWords,
-  price, PACKS, proposeBreakPositions, rewardName, maskNumber,
+  price, PACKS, CUP_PRICES, proposeBreakPositions, rewardName, maskNumber,
 } from "../src";
 
 describe("phone numbers (handout section 12, default country IN)", () => {
@@ -70,18 +70,19 @@ describe("spoken phrase (owner decision: digits then words, single digits not re
 
 describe("pricing and breaks", () => {
   test("no GST is charged: the rupee price is the whole amount; no tax abroad either", () => {
-    expect(price(1000, "INR")).toEqual({ total: 7099, base: 7099, tax: 0 });
+    expect(price(1000, "INR")).toEqual({ total: 7882, base: 7882, tax: 0 });
     expect(price(1000, "USD")).toEqual({ total: 101, base: 101, tax: 0 });
   });
-  test("owner rule 2026-10-09: every price is the old GST-inclusive price (list price + 18%) rounded to the nearest number ending in 99", () => {
-    const oldList = [1999, 2999, 3999, 4999, 5999, 9999, 14999, 24999];
-    const nearest99 = (x: number) => { const lo = Math.floor((x + 1) / 100) * 100 - 1, hi = lo + 100; return x - lo <= hi - x ? lo : hi; };
+  test("owner pricing update 2026-11-23: every rupee price ends in 99 and the ladder rises with the size; the exact list; the US dollar column is unchanged", () => {
+    // (This replaces the owner rule of 2026-10-09, "the old GST-inclusive price rounded to the nearest 99": the boss's ladder is "Rs 2,500 to open a game + Rs 5 per player place, charm endings".)
     PACKS.forEach(([n, inr], i) => {
-      expect(inr % 100).toBe(99);
-      expect(inr).toBe(nearest99(Math.round(oldList[i]! * 1.18 * 100) / 100));
+      if (!(Object.values(CUP_PRICES) as number[]).includes(inr)) expect(inr % 100).toBe(99); // the three cups are the owner's own numbers (2,872 / 4,872 / 7,882)
       expect(price(n, "INR").total).toBe(inr);
+      if (i > 0) { expect(inr).toBeGreaterThan(PACKS[i - 1]![1]); expect(n).toBeGreaterThan(PACKS[i - 1]![0]); }
     });
-    expect(PACKS.map((p) => p[1])).toEqual([2399, 3499, 4699, 5899, 7099, 11799, 17699, 29499]);
+    expect(PACKS.map((p) => p[0])).toEqual([100, 250, 500, 750, 1000, 2500, 5000, 10000]);
+    expect(PACKS.map((p) => p[1])).toEqual([2872, 3799, 4872, 6299, 7882, 11999, 17999, 29999]);
+    expect(PACKS.map((p) => p[2])).toEqual([34, 51, 67, 84, 101, 169, 253, 421]);
   });
   test("break positions are near-equal and capped at 3", () => {
     expect(proposeBreakPositions(3)).toEqual([22, 45, 67]);

@@ -443,7 +443,7 @@ describe("commission for the helper", () => {
     const other = await enroll("9700000001", "Other", "other@partner.example");
     const r = await j(await pay(w.master, { ref: other.code })); expect(r.result.ok).toBe(true);
     expect(raw.query("SELECT ref FROM payment").get()).toEqual({ ref: w.p.code });
-    expect(raw.query("SELECT partner_code, rate, status, base FROM commission").get()).toEqual({ partner_code: w.p.code, rate: 0.5, status: "accrued", base: 4699 });
+    expect(raw.query("SELECT partner_code, rate, status, base FROM commission").get()).toEqual({ partner_code: w.p.code, rate: 0.5, status: "accrued", base: 4872 });
   });
   test("buying with the helper's own mobile number is blocked as self-referral", async () => {
     const w = await ready();

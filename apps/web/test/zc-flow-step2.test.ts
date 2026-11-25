@@ -7,12 +7,12 @@ import { Window } from "happy-dom";
 
 const src = ["zc-flow-game.js", "pack/zc-flow.js"].map((f) => readFileSync(join(import.meta.dir, "../public", f), "utf8")).join("\n");
 const calls: any[] = [];
-const PACKS = [{ upTo: 100, inr: 2399 }, { upTo: 250, inr: 3499 }, { upTo: 500, inr: 4699 }];
-function page() {
+const PACKS = [{ upTo: 100, inr: 2872 }, { upTo: 250, inr: 3799 }, { upTo: 500, inr: 4872 }];
+function page(packs: any[] = PACKS) {
   const win: any = new Window({ url: "http://localhost/zc.html?flow=new&e=EABCDEF" });
   win.document.body.innerHTML = '<main id="app"></main>';
   win.ZG = { roundAt: (ms: number) => Math.floor(ms / 3000) };
-  const fakeFetch = async (url: string, o: any = {}) => { calls.push({ url, method: o.method || "GET", body: o.body ? JSON.parse(o.body) : null }); return { ok: true, json: async () => (url.endsWith("ai-manifest") ? { packs: PACKS } : { ok: true }) }; };
+  const fakeFetch = async (url: string, o: any = {}) => { calls.push({ url, method: o.method || "GET", body: o.body ? JSON.parse(o.body) : null }); return { ok: true, json: async () => (url.endsWith("ai-manifest") ? { packs } : { ok: true }) }; };
   new Function("window", "document", "location", "fetch", src)(win, win.document, win.location, fakeFetch);
   win.ZFLOW.state.done[1] = true; win.ZFLOW.state.open = 2; win.ZFLOW.state.eid = "EABCDEF"; win.ZFLOW.draw();
   return win;
@@ -23,9 +23,24 @@ test("the size list is the game's real pack list, with ₹ prices, smallest alre
   calls.length = 0;
   const win = page(); await wait();
   const opts = [...win.document.querySelectorAll("#zf-size option")].map((o: any) => o.textContent);
-  expect(opts).toEqual(["Up to 100 participants · ₹2,399", "Up to 250 participants · ₹3,499", "Up to 500 participants · ₹4,699"]);
+  expect(opts).toEqual(["Up to 100 players · ₹2,872", "Up to 250 players · ₹3,799", "Up to 500 players · ₹4,872"]);
   expect(win.document.getElementById("zf-size").value).toBe("100");
   expect(calls[0].url).toBe("/api/z/ai-manifest");
+});
+
+const ALL_PACKS = [[100, 2872], [250, 3799], [500, 4872], [750, 6299], [1000, 7882], [2500, 11999], [5000, 17999], [10000, 29999]].map(([upTo, inr]) => ({ upTo, inr }));
+test("owner pricing update 2026-11-23: three cups (Small, Medium 'Most chosen', Large) first; the five other sizes only behind 'See more sizes'; the saved size is still the list's value", async () => {
+  const win = page(ALL_PACKS); await wait();
+  const d = win.document;
+  expect([...d.querySelectorAll(".zf-cup b")].map((b: any) => b.textContent)).toEqual(["Small", "Medium · Most chosen", "Large"]);
+  expect([...d.querySelectorAll(".zf-cup span")].map((b: any) => b.textContent)).toEqual(["Up to 100 players · ₹2,872", "Up to 500 players · ₹4,872", "Up to 1000 players · ₹7,882"]);
+  expect(d.querySelector(".zf-cup.on b").textContent).toBe("Small"); // the smallest is chosen for you
+  const more = d.getElementById("zf-more"); expect(more.querySelector("summary").textContent).toBe("See more sizes"); expect(more.hasAttribute("open")).toBe(false);
+  expect([...more.querySelectorAll("#zf-size option")].map((o: any) => o.value)).toEqual(["100", "250", "500", "750", "1000", "2500", "5000", "10000"]);
+  d.querySelector('[data-cup="500"]').click(); await wait();
+  expect(win.ZFLOW.who.upTo).toBe(500); expect(d.querySelector(".zf-cup.on b").textContent).toBe("Medium · Most chosen");
+  const sel = d.getElementById("zf-size"); sel.value = "2500"; sel.dispatchEvent(new win.Event("change")); await wait();
+  expect(d.querySelectorAll(".zf-cup.on").length).toBe(0); expect(d.getElementById("zf-more").hasAttribute("open")).toBe(true); // a size that is not a cup shows its own list open
 });
 
 test("three cards; the list option is hidden (no coming soon), everybody waits for you", async () => {

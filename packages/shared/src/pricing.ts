@@ -1,11 +1,38 @@
 /**
+ * THE ONE PLACE FOR THE PRICES. To revert a price change, edit PACKS here (and its browser copy `TB.PACKS` in apps/web/public/common.js, which
+ * `apps/web/test/pricing-cups.test.ts` keeps equal to this list), then follow the version rule.
+ *
  * Packs are sold as "Up to N participants" (glossary). [participants, INR price the customer pays, USD price].
- * Owner decision 2026-10-09: the seller is not registered for GST, so NO GST is charged. The INR price is the old GST-inclusive price rounded to the nearest number ending in 99
- * (for example 1999 + 18% = 2358.82 -> 2399). GST_ON is the one switch: when the seller registers, set it to true and GST (18%) is added ON TOP of these prices (review the prices first).
+ * Owner decision 2026-10-09: the seller is not registered for GST, so NO GST is charged. GST_ON is the one switch: when the seller registers, set it to true
+ * and GST (18%) is added ON TOP of these prices (review the prices first).
+ *
+ * Owner pricing update 2026-11-23 (the boss's ladder: "Rs 2,500 to open a game + Rs 5 per player place, charm endings"), three cups for every game and console:
+ * Small up to 100 = Rs 2,872, Medium up to 500 = Rs 4,872 (shown as "Most chosen"), Large up to 1,000 = Rs 7,882. More sizes sit behind "See more sizes":
+ * 250 = 3,799, 750 = 6,299, 2,500 = 11,999, 5,000 = 17,999, 10,000 = 29,999. The US dollar column was not part of that decision and is unchanged.
+ * Before 2026-11-23 the INR prices were 2,399 / 3,499 / 4,699 / 5,899 / 7,099 / 11,799 / 17,699 / 29,499.
  */
+/**
+ * THE ONE CONFIG CONSTANT FOR THE THREE CUP PRICES (INR). Owner decision 2026-11-23, as restated 2026-11-25: Small (100 players) 2,872, Medium (500) 4,872, Large (1,000) 7,882.
+ * PR #39's title said 2,999 / 4,999 / 7,499; the owner's numbers here win. Browser copy: `TB.CUP_PRICES` in common.js (a test keeps them equal).
+ */
+export const CUP_PRICES = { small: 2872, medium: 4872, large: 7882 } as const;
 export const PACKS: ReadonlyArray<readonly [number, number, number]> = [
-  [100, 2399, 34], [250, 3499, 51], [500, 4699, 67], [750, 5899, 84], [1000, 7099, 101], [2500, 11799, 169], [5000, 17699, 253], [10000, 29499, 421],
+  [100, CUP_PRICES.small, 34], [250, 3799, 51], [500, CUP_PRICES.medium, 67], [750, 6299, 84], [1000, CUP_PRICES.large, 101], [2500, 11999, 169], [5000, 17999, 253], [10000, 29999, 421],
 ];
+/** The three cups shown first, everywhere (home page, price page, brochure, console). `upTo` must be a size in PACKS; every other size is behind "See more sizes". */
+export const CUPS: ReadonlyArray<{ readonly key: "small" | "medium" | "large"; readonly name: string; readonly upTo: number; readonly mostChosen: boolean }> = [
+  { key: "small", name: "Small", upTo: 100, mostChosen: false },
+  { key: "medium", name: "Medium", upTo: 500, mostChosen: true },
+  { key: "large", name: "Large", upTo: 1000, mostChosen: false },
+];
+/** Page copy for the cups (owner rules 2026-11-23: you / rupee sign, no tick boxes, never "no data is taken", never "100% secure", never "played by major companies"). Browser copy: `TB.PRICING_COPY` in common.js. */
+export const PRICING_COPY = {
+  headline: "Run a game your whole team will talk about.",
+  benefits: ["You choose auto mode or manual mode.", "Close group only: just the people you invite.", "You are in control, from start to finish."],
+  trust: ["Players' details are erased within 24 hours after the game.", "Pay once per game, receipt straight away."],
+  mostChosen: "Most chosen",
+  moreSizes: "See more sizes",
+} as const;
 export const GST_ON = false;
 export const GST = 0.18;
 export type Currency = "INR" | "USD";

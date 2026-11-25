@@ -2,11 +2,11 @@
 (function () {
   const $ = TB.$, esc = TB.esc, ic = TB.ic;
   const nf = (n) => Number(n).toLocaleString("en-IN");
-  const S = { cur: TB.guessCurrency(), pack: 250 };
+  const S = { cur: TB.guessCurrency(), pack: 500 }; // 500 = the Medium cup ("Most chosen")
   const DEMO = "demo"; // the first choice in both size lists: a free demo game for up to 10 people (no payment); every other step is the same
   const isDemo = () => S.pack === DEMO;
-  const packOptions = (sel) => `<option value="${DEMO}" ${sel === DEMO ? "selected" : ""}>Demo game (up to 10 participants)</option>` + TB.PACKS.map(([n]) => `<option value="${n}" ${n === sel ? "selected" : ""}>Up to ${nf(n)} participants</option>`).join("");
-  const FREE = { on: true, cap: 1e9 }; // the process: sign in, build the engagement, pay only when publishing
+  const packOptions = (sel) => `<option value="${DEMO}" ${sel === DEMO ? "selected" : ""}>Demo game (up to 10 players)</option>` + TB.PACKS.map(([n]) => `<option value="${n}" ${n === sel ? "selected" : ""}>Up to ${nf(n)} players</option>`).join("");
+  const FREE = { on: true, cap: 1e9 }; // the process: sign in, build the game, pay only when publishing
   let ORDER = null;
 
   // ---------- price display ----------
@@ -17,6 +17,13 @@
       : `<span>Total <b>${TB.money(x.total, "USD")}</b></span><span>No tax added · billed in US dollars</span>`;
   }
   function renderPrices() {
+    if (!TB.CUPS || !TB.PRICING_COPY) { // an OLD common.js saved on this phone (the service worker serves it stale while it renews): it holds the OLD price list, so show NO price, no Create button, and ask for a reload (it heals by itself on the next load)
+      const hb = $("heroBrk"), pk = $("packs"), pn = $("priceNote"), pb = $("payBtn");
+      if (hb) hb.innerHTML = ""; if (pb) pb.disabled = true;
+      if (pk) pk.innerHTML = `<p class="cup-stale">The prices on this page are being renewed. Please reload the page to see them. <button type="button" data-reload>Reload</button></p>`;
+      if (pn) pn.textContent = "Prices are shown after the page is reloaded.";
+      return;
+    }
     document.querySelectorAll("[data-cur]").forEach((el) => {
       el.innerHTML = ["INR", "USD"].map((k) => `<button type="button" class="${S.cur === k ? "on" : ""}" aria-pressed="${S.cur === k}" data-c="${k}">${k === "INR" ? "₹ INR" : "US$"}</button>`).join("");
     });
@@ -24,27 +31,29 @@
     { const pb = $("payBtn"), bt = pb && pb.querySelector(".bt"); if (bt) bt.textContent = isDemo() ? "Start your free demo game" : "Create your Corporate Tambola"; }
     if (isDemo()) { // the free demo game: same process (sign in, then the draft), nothing to pay
       if ($("heroBrk")) $("heroBrk").innerHTML = `<span>Total <b>Free</b></span><span>Demo game · up to 10 people · every screen says DEMO GAME</span>`;
-      $("packs").innerHTML = `<div class="pcard"><div class="pwho"><label for="pack2">How many participants?</label><div class="selwrap"><select id="pack2" aria-label="Number of participants">${packOptions(S.pack)}</select><svg class="ic chev"><use href="#i-chev"/></svg></div></div><div class="pmain"><div class="pamt"><span class="tot"><small>Demo game</small> Free</span></div><button type="button" class="btn pcta" data-demo="1" aria-label="Start your free demo game">Start your free demo game ${ic("arrow")}</button></div><ul class="pperks"><li><span class="tick" aria-hidden="true">&#10003;</span>Up to 10 people, no payment</li><li><span class="tick" aria-hidden="true">&#10003;</span>Every screen says DEMO GAME</li><li><span class="tick" aria-hidden="true">&#10003;</span>Make it a real game whenever you like</li></ul></div>`;
+      $("packs").innerHTML = `<div class="pcard"><div class="pwho"><label for="pack2">How many players?</label><div class="selwrap"><select id="pack2" aria-label="Number of players">${packOptions(S.pack)}</select><svg class="ic chev"><use href="#i-chev"/></svg></div></div><div class="pmain"><div class="pamt"><span class="tot"><small>Demo game</small> Free</span></div><button type="button" class="btn pcta" data-demo="1" aria-label="Start your free demo game">Start your free demo game ${ic("arrow")}</button></div><ul class="pperks"><li><span class="tick" aria-hidden="true">&#10003;</span>Up to 10 people, no payment</li><li><span class="tick" aria-hidden="true">&#10003;</span>Every screen says DEMO GAME</li><li><span class="tick" aria-hidden="true">&#10003;</span>Make it a real game whenever you like</li></ul></div>`;
       if ($("pack2")) $("pack2").value = String(S.pack);
       $("priceNote").textContent = "The free demo game is for up to 10 people and costs nothing. Sign in with your e-mail and build it the same way as a real game."; return;
     }
     if ($("heroBrk")) $("heroBrk").innerHTML = breakdown(S.pack, S.cur);
-    { // one price card: the organizer picks the size, then sees the one real price (never a list of every pack, never a struck-out "was" price: gap plan 2026-10-29, TA17)
-      const n = S.pack, x = TB.price(n, S.cur), shown = S.cur === "INR" ? x.base : x.total;
-      const opts = packOptions(n);
-      const perks = ["All features included", "Free AI assistant to build your game", "Unlimited fun for your company&rsquo;s extended family", "Your brand and message breaks: play your video or audio", "Everyone engaged", "Create positive vibes", "Build it free, pay just before the game starts", "No fee to create or edit your game", "All participant data deleted within 24 hours", "A small amount, simple for HR / Admin to pay and claim back"];
-      $("packs").innerHTML = `<div class="pcard"><div class="pwho"><label for="pack2">How many participants?</label><div class="selwrap"><select id="pack2" aria-label="Number of participants">${opts}</select><svg class="ic chev"><use href="#i-chev"/></svg></div></div>` +
-        `<div class="pmain">` +
-        `<div class="pamt"><span class="tot"><small>Price</small> ${TB.money(shown, S.cur)}</span></div>` +
-        `<button type="button" class="btn pcta" data-buy="${n}" aria-label="Create your game for up to ${nf(n)} participants">Create your game ${ic("arrow")}</button></div>` +
-        `<ul class="pperks">${perks.map((t) => `<li><span class="tick" aria-hidden="true">&#10003;</span>${t}</li>`).join("")}</ul></div>`;
+    { // three cups (Small, Medium, Large), the other sizes behind "See more sizes" (owner pricing update 2026-11-23); the prices come from TB.PACKS, never a struck-out "was" price
+      const C = TB.PRICING_COPY, cupNames = TB.CUPS.map((c) => c.upTo);
+      const cup = (c) => { const x = TB.price(c.upTo, S.cur), shown = S.cur === "INR" ? x.base : x.total;
+        return `<article class="cup${c.mostChosen ? " cup-pop" : ""}">${c.mostChosen ? `<span class="cup-tag">${esc(C.mostChosen)}</span>` : ""}<h3>${esc(c.name)}</h3><p class="cup-up">Up to ${nf(c.upTo)} players</p><p class="cup-price">${TB.money(shown, S.cur)}</p>` +
+          `<ul class="cup-b">${C.benefits.map((t) => `<li>${esc(t)}</li>`).join("")}</ul><button type="button" class="cup-go" data-buy="${c.upTo}" aria-label="Create your ${esc(c.name)} game for up to ${nf(c.upTo)} players">Create your game</button></article>`; };
+      const more = TB.PACKS.filter((p) => !cupNames.includes(p[0])).map(([n]) => { const x = TB.price(n, S.cur), shown = S.cur === "INR" ? x.base : x.total;
+        return `<tr><td>Up to ${nf(n)} players</td><td class="num">${TB.money(shown, S.cur)}</td><td class="num"><button type="button" class="cup-go2" data-buy="${n}" aria-label="Create your game for up to ${nf(n)} players">Create your game</button></td></tr>`; }).join("");
+      $("packs").innerHTML = `<div class="cups"><div class="cuprow">${TB.CUPS.map(cup).join("")}</div>` +
+        `<details class="cup-more"${cupNames.includes(S.pack) ? "" : " open"}><summary>${esc(C.moreSizes)}</summary><table class="cup-sizes"><thead><tr><th>Size</th><th class="num">Price</th><th class="num"><span class="sr">Create</span></th></tr></thead><tbody>${more}</tbody></table></details>` +
+        `<ul class="cup-trust">${C.trust.map((t) => `<li>${esc(t)}</li>`).join("")}</ul><p class="cup-legal"><a href="/terms.html">Terms</a> &middot; <a href="/privacy.html">Privacy</a></p></div>`;
     }
     if ($("pack2")) $("pack2").value = String(S.pack);
-    if (FREE.on) { $("priceNote").textContent = "You build and publish your engagement for free. You pay before it starts: if it is not paid by the start time, it will not begin. " + (S.cur === "INR" ? "Prices in Indian rupees." : "Prices in US dollars."); return; }
+    if (FREE.on) { $("priceNote").textContent = "You build and publish your game for free. You pay before it starts: if it is not paid by the start time, it will not begin. " + (S.cur === "INR" ? "Prices in Indian rupees." : "Prices in US dollars."); return; }
     $("priceNote").textContent = S.cur === "INR" ? "Prices in Indian rupees. Billed in India." : "Prices in US dollars. Billed outside India.";
   }
   document.addEventListener("click", (e) => {
     const c = e.target.closest("[data-c]"); if (c) { S.cur = c.dataset.c; renderPrices(); if ($("ordSum")) sumRefresh(); return; }
+    if (e.target.closest("[data-reload]")) { location.reload(); return; }
     if (e.target.closest("[data-demo]")) { startDemo(); return; }
     const b = e.target.closest("[data-buy]"); if (b) { S.pack = +b.dataset.buy; renderPrices(); openCheckout(S.pack); return; }
     if (e.target.closest("[data-close]")) TB.closeSheet();
@@ -85,8 +94,8 @@
     if (FREE.on) return openFree();
     ORDER = { pack };
     const def = TB.guessCountry();
-    TB.sheet(`${xbtn}<div class="eyebrow">Your order</div><h2>Up to ${nf(pack)} participants</h2>
-      <ul class="facts"><li>${ic("ticket")}Every participant gets their own ticket on their phone</li><li>${ic("phone")}Mobile number only. No SMS, no app, no password for participants</li><li>${ic("users")}A close group engagement for your people, in any country</li><li>${ic("gift")}Participants never pay. You give the rewards</li></ul>
+    TB.sheet(`${xbtn}<div class="eyebrow">Your order</div><h2>Up to ${nf(pack)} players</h2>
+      <ul class="facts"><li>${ic("ticket")}Every player gets their own ticket on their phone</li><li>${ic("phone")}Mobile number only. No SMS, no app, no password for players</li><li>${ic("users")}A close group game for your people, in any country</li><li>${ic("gift")}Players never pay. You give the rewards</li></ul>
       <div class="sum" id="ordSum"></div>
       <form id="coForm" novalidate>
         <label class="lb" for="oName">Organization name</label><input class="inp" id="oName" autocomplete="organization" placeholder="e.g. Acme Industries">
@@ -94,7 +103,7 @@
         <label class="lb" for="oPh">Your mobile number (optional)</label><input class="inp" id="oPh" type="tel" autocomplete="tel" placeholder="98765 43210">
         <label class="lb" for="oCty">Country of your organization</label><select class="inp" id="oCty">${TB.countryOpts(def)}</select>
         <div id="taxBox"></div><div id="k3wrap">${CBConsent.html("K3")}</div><div id="fErr"></div>
-        <button class="btn block" style="margin-top:16px" type="submit" id="payGo" disabled aria-disabled="true">${ic("lock")} ${PAYMODE === "razorpay" ? "Pay securely with Razorpay" : PAYMODE === "off" ? "Payments are not switched on yet" : "Pay (local test payment)"}</button>
+        <button class="btn block" style="margin-top:16px" type="submit" id="payGo" disabled aria-disabled="true">${ic("lock")} ${PAYMODE === "razorpay" ? "Pay now" : PAYMODE === "off" ? "Payments are not switched on yet" : "Pay (local test payment)"}</button>
       </form>
       <p class="proto">${PAYMODE === "razorpay" ? "Secure payment by Razorpay. If you cancel a paid game before it starts, your payment stays as credit for your next game, valid for 365 days. Unused credit lapses at the end of day 365. The organizer keeps the credit in their account. Once it has started, a paid game cannot be cancelled. Payment to <a href='https://itservices-rajat-agarwal.pages.dev/' rel='noopener' target='_blank'>IT Services by Rajat Agarwal</a>. An invoice is emailed to you." : "Local test payment: no real money is taken. Unused places are not credited."}</p>`);
     $("oCty").addEventListener("change", taxField);
@@ -121,10 +130,10 @@
     try { if (Number.isInteger(S.pack) && S.pack > 10) { sessionStorage.setItem("ctz-cap", String(S.pack)); } } catch {} // the size chosen on the website carries through the sign-in: Quick setup opens with it
     TB.sheet(`${xbtn}<div class="openfree" role="group" aria-labelledby="ofTitle">
       <div class="sheethead"><span class="rolepill">For the organizer or host</span><span class="sbrand" role="img" aria-label="Corporate Tambola"><span class="mark"><img src="/logo-mark.svg?v=2" alt="" width="26" height="26"></span><span class="word">Corporate Tambola<i>.</i></span></span></div>
-      <div class="eyebrow ofeye">Build it and publish it free.</div><h2 id="ofTitle">Create your engagement</h2>
-      <ul class="bgrid"><li><span class="bico">${ic("play")}</span><span>Play a video or audio message between numbers</span></li><li><span class="bico">${ic("trophy")}</span><span>Set several prizes, and add a lucky draw</span></li><li><span class="bico">${ic("users")}</span><span>A closed-group corporate tambola (housie)</span></li><li><span class="bico">${ic("ticket")}</span><span>Every ticket is unique: no two can ever match</span></li><li><span class="bico">${ic("phone")}</span><span>Each participant gets their own ticket</span></li><li><span class="bico">${ic("star")}</span><span>A free AI assistant sets it up for you</span></li><li><span class="bico">${ic("gift")}</span><span>Participants never pay. You provide the rewards</span></li><li><span class="bico">${ic("trash")}</span><span>All participant data is deleted within 24 hours of the game ending</span></li><li><span class="bico">${ic("shield")}</span><span>Built for DPDP Act, GDPR and US privacy laws</span></li></ul>
+      <div class="eyebrow ofeye">Build it and publish it free.</div><h2 id="ofTitle">Create your game</h2>
+      <ul class="bgrid"><li><span class="bico">${ic("play")}</span><span>Play a video or audio message between numbers</span></li><li><span class="bico">${ic("trophy")}</span><span>Set several prizes, and add a lucky draw</span></li><li><span class="bico">${ic("users")}</span><span>A closed-group corporate tambola (housie)</span></li><li><span class="bico">${ic("ticket")}</span><span>Every ticket is unique: no two can ever match</span></li><li><span class="bico">${ic("phone")}</span><span>Each player gets their own ticket</span></li><li><span class="bico">${ic("star")}</span><span>A free AI assistant sets it up for you</span></li><li><span class="bico">${ic("gift")}</span><span>Players never pay. You provide the rewards</span></li><li><span class="bico">${ic("trash")}</span><span>All player data is deleted within 24 hours of the game ending</span></li><li><span class="bico">${ic("shield")}</span><span>Built for DPDP Act, GDPR and US privacy laws</span></li></ul>
       <div id="k2wrap">${CBConsent.html("K2")}</div>${gBox}<form id="frForm" novalidate><label class="lb" for="fMail">Your email</label><input class="inp big" id="fMail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="your e-mail" aria-describedby="fErr"><div id="fErr"></div>
-      <button class="btn block big" style="margin-top:14px" type="submit" id="frGo" disabled aria-disabled="true">Create my engagement ${ic("arrow")}</button></form>
+      <button class="btn block big" style="margin-top:14px" type="submit" id="frGo" disabled aria-disabled="true">Create my game ${ic("arrow")}</button></form>
       <p class="trust">${ic("shield")}Free to build and publish. No password.</p>
       <p class="proto">Your console opens at once. We use your email for your invoice and to sign you in later.</p><p class="proto"><a href="/demo.html">Want to see it first? Try the free 70-second demo.</a></p>
       <p class="spriv accept">Read the <a href="/terms.html" target="_blank" rel="noopener">Terms</a> and the <a href="/legal.html#privacy" target="_blank" rel="noopener">Privacy &amp; Data Policy</a> before you tick the box.</p></div>`);
@@ -162,10 +171,10 @@
   }
   function done() {
     const o = ORDER;
-    TB.sheet(`${xbtn}<div class="res ok">${ic("check")}</div><h2 class="center">Your engagement is ready</h2>
-      <div class="sum"><div class="kv"><span>Order</span><b class="mono">${esc(o.orderId)}</b></div><div class="kv"><span>Organization</span><b>${esc(o.org)}</b></div><div class="kv"><span>Participants</span><b>Up to ${nf(o.pack)}</b></div><div class="kv t"><span>${o.mode === "test" ? "Paid (test)" : "Paid"}</span><b>${TB.money(o.total, o.currency)}</b></div>${o.invoiceNumber ? `<div class="kv"><span>Invoice</span><b class="mono"><a href="${esc(o.invoiceUrl)}" target="_blank" rel="noopener">${esc(o.invoiceNumber)}</a></b></div>` : ""}</div>
+    TB.sheet(`${xbtn}<div class="res ok">${ic("check")}</div><h2 class="center">Your game is ready</h2>
+      <div class="sum"><div class="kv"><span>Order</span><b class="mono">${esc(o.orderId)}</b></div><div class="kv"><span>Organization</span><b>${esc(o.org)}</b></div><div class="kv"><span>Players</span><b>Up to ${nf(o.pack)}</b></div><div class="kv t"><span>${o.mode === "test" ? "Paid (test)" : "Paid"}</span><b>${TB.money(o.total, o.currency)}</b></div>${o.invoiceNumber ? `<div class="kv"><span>Invoice</span><b class="mono"><a href="${esc(o.invoiceUrl)}" target="_blank" rel="noopener">${esc(o.invoiceNumber)}</a></b></div>` : ""}</div>
       ${o.organizerKey ? `<div class="note info" role="note"><b>Your organizer key</b> (shown only once, and we have emailed it to you):<div class="mono" id="orgKey" style="word-break:break-all;margin:6px 0">${esc(o.organizerKey)}</div><button class="btn sm" type="button" id="cpKey">Copy key</button></div>` : `<p class="small muted center">You already have an organizer key. Sign in with your e-mail to continue.</p>`}
-      <p class="small muted center">Next step: open your console to set the date, add participants and share the link. We sent the details and your invoice to <b>${esc(o.email)}</b>.</p>
+      <p class="small muted center">Next step: open your console to set the date, add players and share the link. We sent the details and your invoice to <b>${esc(o.email)}</b>.</p>
       <div id="mailNote"></div>
       <div id="fErr"></div>
       <button class="btn block" id="toLogin" type="button">Open my console ${ic("arrow")}</button>`);
@@ -178,7 +187,7 @@
   /** Where a signed-in organizer goes next: the page the visit began on (the console, a pay page, or the free demo link) or the console. */
   function nextAfterSignIn() { let nx = "/zc.html"; try { const n = sessionStorage.getItem("ctz-next"); if (n && /^\/(zc|pay)(\.html)?(\?(e=[A-Za-z0-9_-]{4,40}|demo=1|quick=1(&cap=\d{1,5})?))?$/.test(n)) nx = n; sessionStorage.removeItem("ctz-next"); } catch {} return nx; }
   function openLogin(email) {
-    TB.sheet(`${xbtn}<div class="eyebrow">Organizer sign-in</div><h2>Sign in or create your account</h2><p class="muted small">Type your e-mail and press Continue. That is all: there is no password. New here? Your account is made at once. Coming back? We e-mail you two ways to get in; you use <b>one</b> of them. Participants never sign in here: they join with your game link.</p>
+    TB.sheet(`${xbtn}<div class="eyebrow">Organizer sign-in</div><h2>Sign in or create your account</h2><p class="muted small">Type your e-mail and press Continue. That is all: there is no password. New here? Your account is made at once. Coming back? We e-mail you two ways to get in; you use <b>one</b> of them. Players never sign in here: they join with your game link.</p>
       ${gBox}<form id="lgForm" novalidate><label class="lb" for="lMail">Your e-mail</label><input class="inp big" id="lMail" data-need="1" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="your e-mail" value="${esc(email || "")}"><div id="k2slot"></div><div id="fErr"></div>
       <button class="btn block big" style="margin-top:14px" type="submit" id="lgGo">Continue ${ic("arrow")}</button></form>
       <p class="spriv accept">Our <a href="/terms.html" target="_blank" rel="noopener">Terms</a> and <a href="/legal.html#privacy" target="_blank" rel="noopener">Privacy &amp; Data Policy</a> are on our site.</p>`);

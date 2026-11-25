@@ -41,7 +41,7 @@ export type Phase = "boot" | "missing" | "join" | "play" | "ended";
 export interface RuntimeView {
   phase: Phase; error: string | null; pid: string | null; ticket: Ticket | null; log: number[]; nowRound: number | null;
   locked: boolean;
-  startRound: number; scheduledRound: number; callSeconds: number; mode: "live" | "hold" | "blind" | "none"; /** A claim is being checked: the game waits for everyone (gentle words: "Claim being checked"). */ claimHold: boolean; paused: boolean; stopped: boolean;
+  startRound: number; scheduledRound: number; callSeconds: number; mode: "live" | "hold" | "blind" | "none"; /** A claim is being checked: the game waits for everyone (gentle words: "Claim being checked"). */ claimHold: boolean; /** This game's tie setting, so the claim rules line tells the truth (absent in a game saved before it was kept). */ ties?: "share" | "next"; paused: boolean; stopped: boolean;
   claimed: PatternKey[]; unsent: number; results: { pattern: PatternKey | "lucky"; ordinal: number; idx: number; count: number; winners?: string[]; tickets?: number[]; round?: number }[]; pendingChecks: number; discarded: number;
   nextCallInSec: number | null;
   /** Seconds left to claim, minus one (11 down to 0): a nudge only, the game's clock decides. null when there is no gap to count (a Host calls the numbers) or no time left. */
@@ -872,7 +872,7 @@ export class PhoneRuntime {
     return {
       phase: this.phase, error: this.error, pid: this.pid, ticket: this.ticket, log: this.visibleLog(), nowRound: now, startRound: this.startRound, scheduledRound: this.scheduledRound, callSeconds: this.callSeconds,
       locked: this.locked, announcement: this.announcement,
-      mode: now === null ? (this.controlState === "none" ? "none" : "hold") : this.modeAt(now), paused: isPaused, claimHold: !!this.tracker && now !== null && this.tracker.holds.some((h) => now >= h.start && now < h.end), stopped: !!st && now !== null && st.stopRound !== null && now >= st.stopRound,
+      mode: now === null ? (this.controlState === "none" ? "none" : "hold") : this.modeAt(now), paused: isPaused, claimHold: !!this.tracker && now !== null && this.tracker.holds.some((h) => now >= h.start && now < h.end), ...(this.cfg.ties ? { ties: this.cfg.ties } : {}), stopped: !!st && now !== null && st.stopRound !== null && now >= st.stopRound,
       claimed: claimedNow, unsent: this.unsent, results: this.allResults.filter((x) => (x.round ?? 1) === this.cur), pendingChecks: this.store.pending(), discarded: this.store.discarded,
       nextCallInSec: nextRound !== null && now !== null ? secsTo(nextRound) : null,
       reconnecting: this.reconnecting,

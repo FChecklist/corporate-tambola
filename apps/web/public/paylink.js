@@ -1,5 +1,5 @@
 /* Corporate Tambola: the page behind a "payment link" (docs/ROLES_AND_CONSOLE_SPEC_2.md, item 13). Anyone who holds the link can open it, with no sign-in. It is a payment INFORMATION page first:
-   the game (name, game ID, number of participants, date and start time in India time, the organizer's name and masked e-mail) and the price, then Pay. The payer is asked for nothing but the country
+   the game (name, game ID, number of players, date and start time in India time, the organizer's name and masked e-mail) and the price, then Pay. The payer is asked for nothing but the country
    (it decides the currency); Razorpay asks for the mobile and the e-mail. Only after Pay does Razorpay open, and it pays for THAT game and no other. The server decides the price and verifies the payment.
    After the payment the page shows what Razorpay gave us and a short optional form for the invoice (name, company, GST / Tax ID) with a Skip button.
    The look and the behaviour are the shared payment kit (paykit.js), the same in all six games; the chosen country, the payment already made and the typed text are kept for this tab. */

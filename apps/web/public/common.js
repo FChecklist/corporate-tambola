@@ -100,9 +100,19 @@
   TB.plural = (n, a, b) => n + " " + (n === 1 ? a : b || a + "s");
   TB.initials = (s) => (s || "?").trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
   TB.money = (n, cur) => cur === "INR" ? "₹" + Number(n).toLocaleString("en-IN", { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 }) : "US$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 });
-  // [participants, INR price (no GST is charged), USD]. Mirror of packages/shared/src/pricing.ts.
+  // [players, INR price (no GST is charged), USD]. Mirror of packages/shared/src/pricing.ts (apps/web/test/pricing-cups.test.ts keeps the two equal).
   TB.GST_ON = false;
-  TB.PACKS = [[100, 2399, 34], [250, 3499, 51], [500, 4699, 67], [750, 5899, 84], [1000, 7099, 101], [2500, 11799, 169], [5000, 17699, 253], [10000, 29499, 421]];
+  TB.CUP_PRICES = { small: 2872, medium: 4872, large: 7882 }; // the one constant for the three cups; mirror of CUP_PRICES in pricing.ts
+  TB.PACKS = [[100, TB.CUP_PRICES.small, 34], [250, 3799, 51], [500, TB.CUP_PRICES.medium, 67], [750, 6299, 84], [1000, TB.CUP_PRICES.large, 101], [2500, 11999, 169], [5000, 17999, 253], [10000, 29999, 421]];
+  // The three cups shown first (Small, Medium, Large) and the page copy around them. Mirror of CUPS and PRICING_COPY in packages/shared/src/pricing.ts.
+  TB.CUPS = [{ key: "small", name: "Small", upTo: 100, mostChosen: false }, { key: "medium", name: "Medium", upTo: 500, mostChosen: true }, { key: "large", name: "Large", upTo: 1000, mostChosen: false }];
+  TB.PRICING_COPY = {
+    headline: "Run a game your whole team will talk about.",
+    benefits: ["You choose auto mode or manual mode.", "Close group only: just the people you invite.", "You are in control, from start to finish."],
+    trust: ["Players' details are erased within 24 hours after the game.", "Pay once per game, receipt straight away."],
+    mostChosen: "Most chosen",
+    moreSizes: "See more sizes",
+  };
   TB.price = (pack, cur) => { const p = TB.PACKS.find((x) => x[0] === pack); if (cur === "INR") { const t = TB.GST_ON ? Math.round(p[1] * 0.18 * 100) / 100 : 0; return { total: Math.round((p[1] + t) * 100) / 100, base: p[1], tax: t }; } return { total: p[2], base: p[2], tax: 0 }; };
   TB.guessCurrency = () => { try { return /^Asia\/(Kolkata|Calcutta)$/.test(Intl.DateTimeFormat().resolvedOptions().timeZone) ? "INR" : "USD"; } catch { return "USD"; } };
 

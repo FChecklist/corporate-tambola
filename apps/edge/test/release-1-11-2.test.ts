@@ -18,8 +18,9 @@ const T = Date.UTC(2026, 10, 21, 10, 0, 0);
 
 describe("1.11.2: the version rule (a change after a deploy is a new version)", () => {
   test("releases.json (it feeds the footer, /version.json and the owner's release page), package.json, CHANGELOG and the knowledge page all say 1.11.2, with 1.11.1 and 1.11.0 right under it", () => {
-    expect(rel.slice(0, 3).map((r) => r.version)).toEqual(["1.11.2", "1.11.1", "1.11.0"]);
-    expect(rel[0]!.date).toMatch(/^2026-11-2\d$/); expect(rel[0]!.changes.length).toBeGreaterThan(3);
+    const i2 = rel.findIndex((r) => r.version === "1.11.2"); expect(i2).toBeGreaterThanOrEqual(0); // newer releases (1.12.0: the pricing update) may sit above it; see release-1-12-0.test.ts
+    expect(rel.slice(i2, i2 + 3).map((r) => r.version)).toEqual(["1.11.2", "1.11.1", "1.11.0"]);
+    expect(rel[i2]!.date).toMatch(/^2026-11-2\d$/); expect(rel[i2]!.changes.length).toBeGreaterThan(3);
     expect(JSON.parse(read("package.json")).version).toBe(rel[0]!.version);
     const log = read("CHANGELOG.md");
     expect(log).toMatch(/^## 1\.11\.2 - 2026-11-2\d$/m); expect(log.indexOf("## 1.11.2")).toBeLessThan(log.indexOf("## 1.11.1"));
@@ -29,10 +30,10 @@ describe("1.11.2: the version rule (a change after a deploy is a new version)", 
     expect(read("docs/KNOWLEDGE/05-OPEN-ITEMS.md")).toContain("## Release 1.11.2");
   });
   test("the release notes are plain: no code names, no file names, no settings written as code", () => {
-    for (const c of rel[0]!.changes) { expect(c).not.toMatch(/`|\.ts\b|\.js\b|DATAREQ_|HD_INVITE|kv\b/); expect(c.length).toBeLessThan(520); }
+    for (const c of rel.find((r) => r.version === "1.11.2")!.changes) { expect(c).not.toMatch(/`|\.ts\b|\.js\b|DATAREQ_|HD_INVITE|kv\b/); expect(c.length).toBeLessThan(520); }
   });
   test("the 1.11.1 entry does not promise more than it did: it says one GAME, and points to 1.11.2 for the rest", () => {
-    expect(rel[1]!.changes[0]).toMatch(/ONE game/); expect(rel[1]!.changes[0]).toContain("1.11.2");
+    const r1 = rel.find((r) => r.version === "1.11.1")!; expect(r1.changes[0]).toMatch(/ONE game/); expect(r1.changes[0]).toContain("1.11.2");
   });
 });
 

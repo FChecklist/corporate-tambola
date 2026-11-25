@@ -47,3 +47,9 @@ See `10-RELEASE-1.11.1.md`, section Open: two audits on the exact head commit, t
 
 ## Release 1.11.2 (21 Nov 2026): what is open
 See `11-RELEASE-1.11.2.md`, section Open: two audits on the exact head commit, then a deploy. The caps are a ceiling, not a lock: with many networks and many helper accounts the site-wide caps (30 data-request mails to the owner a day, 30 Help Desk invitations an hour) can still be filled, and then real helpers wait. The owner's old address is still in the history of git (a pull request cannot remove it). Still open by choice: Turnstile, `List-Unsubscribe`, owner e-mail for the 80 % and 100 % alerts, a site-wide cap on the sign-in code.
+
+## Release 1.12.1 (25 Nov 2026): what is open
+See `13-RELEASE-1.12.1.md`: two audits on the exact head commit; the owner decides about the idle end (not in the code), the older "Co-host" name, and the brochure PDF rebuild.
+
+## Release 1.12.0 (24 Nov 2026): what is open
+See `12-RELEASE-1.12.0.md`, section Decisions and open points: two audits on the exact head commit, then a deploy (which also ships 1.11.1 and 1.11.2, merged but not live). The owner decides about the word "erased" in the trust line (the 1 Nov order says never) and whether the dollar prices follow the rupee ones.

@@ -38,20 +38,20 @@ Note: "sales partner" and "Refer and Earn partner" are the **same server entity*
 
 ## 4. Business model and price packs
 
-Price is **per engagement, by size** (not per ticket, not a subscription). Source of truth: `packages/shared/src/pricing.ts:2` (`PACKS`), `GST = 0.18` at `:5`.
+Price is **per engagement, by size** (not per ticket, not a subscription). Source of truth: `packages/shared/src/pricing.ts` (`PACKS`, `CUPS`, `PRICING_COPY`); browser copy `TB.PACKS` in `apps/web/public/common.js`, kept equal by `apps/web/test/pricing-cups.test.ts`. Since 9 Oct 2026 no GST is charged (`GST_ON = false`), so the price shown is the price paid. List valid from 24 Nov 2026 (release 1.12.0):
 
-| Pack (up to N participants) | INR software price (excl. GST) | INR incl. 18% GST | USD (all-inclusive, no GST) |
+| Pack (up to N participants) | INR (no GST charged) | USD (no GST) | Shown as |
 |---|---|---|---|
-| 100 | 1,999 | 2,358.82 | 34 |
-| 250 | 2,999 | 3,538.82 | 51 |
-| 500 | 3,999 | 4,718.82 | 67 |
-| 750 | 4,999 | 5,898.82 | 84 |
-| 1000 | 5,999 | 7,078.82 | 101 |
-| 2500 | 9,999 | 11,798.82 | 169 |
-| 5000 | 14,999 | 17,698.82 | 253 |
-| 10000 | 24,999 | 29,498.82 | 421 |
+| 100 | 2,999 | 34 | cup "Small" |
+| 250 | 3,799 | 51 | behind "See more sizes" |
+| 500 | 4,999 | 67 | cup "Medium" ("Most chosen") |
+| 750 | 6,299 | 84 | behind "See more sizes" |
+| 1000 | 7,499 | 101 | cup "Large" |
+| 2500 | 11,999 | 169 | behind "See more sizes" |
+| 5000 | 17,999 | 253 | behind "See more sizes" |
+| 10000 | 29,999 | 421 | behind "See more sizes" |
 
-- The site shows these as a "Festive offer: 50% off" with a regular price struck out (`apps/web/public/site.js:27`); the **charged price is the table above** (test `apps/edge/test/branding.test.ts` "structured data prices equal the real packs").
+- The home page and the price page show the three cups first and the other five sizes behind "See more sizes" (`apps/web/public/site.js`, `pricing.html`); no struck-out "was" price. The **charged price is the table above** (test `apps/edge/test/branding.test.ts` "structured data prices equal the real packs").
 - An engagement's `cap` need not equal a pack size; the **smallest pack >= cap** is charged (`worker.ts` summary, `pay.ts:190`). Above 10,000 needs "a custom arrangement" (`pay.ts:191`). Hard server limit of `cap` is 100,000 (`worker.ts:859`).
 - **We do not give refunds.** If you cancel a paid game before it starts, your payment stays as credit for your next game for 365 days; unused credit lapses at the end of day 365 (India time). Unused places are not credited once the game has started (`AI_MANIFEST.payment_faq` in `apps/edge/src/worker.ts`; mechanics in `06-BUSINESS-LOGIC.md` section 3c).
 - **Refer & Earn**: partners earn **50% of the taxable (pre-GST) value** of a referred, paid purchase, and the same 50% on the same customer's repeat purchases within 365 days (`apps/edge/src/partners.ts:15-18`).

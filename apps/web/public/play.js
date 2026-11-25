@@ -1,4 +1,4 @@
-/* Corporate Tambola: participant page (/e/CODE engagement link, /p/CODE personal pass). Vanilla JS, no build. */
+/* Corporate Tambola: player page (/e/CODE game link, /p/CODE personal pass). Vanilla JS, no build. */
 (function () {
   "use strict";
   const $ = TB.$, esc = TB.esc, ic = TB.ic, enc = encodeURIComponent;
@@ -7,7 +7,7 @@
   const MODE = seg[0], LINK = seg[1] || "";
   let code = MODE === "e" ? LINK : "";
   document.title = "Corporate Tambola";
-  // Thin client: download the whole participant app once and keep it on the phone (see sw.js).
+  // Thin client: download the whole player app once and keep it on the phone (see sw.js).
   TB.sw.on(() => { if ($("hd")) paintHd(); });
   TB.sw.start("participant");
 
@@ -17,15 +17,15 @@
   const ERRS = {
     inuse: ["phone", "Already in use on another phone", "This number or pass has already joined on another phone. Only one phone can take part per number. Your organizer has been alerted and can move your entry to this phone."],
     cancelled: ["x", "This pass was cancelled", "The person who sent it cancelled this pass. Ask them to send you a new one."],
-    closed: ["lock", "Entry is closed", "The engagement has started, so nobody new can join. Ask your organizer about the next engagement."],
-    full: ["users", "This engagement is full", "This engagement has reached its limit of participants. Ask your organizer if a place can be freed."],
-    declined: ["x", "Request not accepted", "The organizer did not admit this number to this engagement."],
+    closed: ["lock", "Entry is closed", "The game has started, so nobody new can join. Ask your organizer about the next game."],
+    full: ["users", "This game is full", "This game has reached its limit of players. Ask your organizer if a place can be freed."],
+    declined: ["x", "Request not accepted", "The organizer did not admit this number to this game."],
     rate: ["clock", "Too many tries", "Please wait 10 minutes, then try again, or ask your organizer to check your number."],
     badlink: ["alert", "This link does not work", "Check the link your organizer sent you."],
     usepass: ["ticket", "Use your personal pass", "A personal pass was sent to this number. Open the pass link from your messages. You do not need to type your number."],
     moved: ["phone", "This phone was logged out", "Your entry was moved to another phone. If that was not you, contact your organizer."],
-    deleted: ["trash", "This engagement has ended", "Its data has been deleted."],
-    endedNew: ["flag", "This engagement has ended", "Thank you for your interest. Entry is closed."],
+    deleted: ["trash", "This game has ended", "Its data has been deleted."],
+    endedNew: ["flag", "This game has ended", "Thank you for your interest. Entry is closed."],
   };
 
   // ---------- small helpers ----------
@@ -44,9 +44,9 @@
   }
   function fatal(msg) { show(`${ptop()}<div class="pcard center"><div class="res no">${ic("alert")}</div><h2>Something went wrong</h2><p class="lead">${esc(msg)}</p><button class="btn line block" data-act="reload">Try again</button></div>`); }
   const consentBox = (id, html) => `<label class="cb" style="border:1px solid var(--line);border-radius:12px;padding:12px"><input type="checkbox" id="${id}"><span>${html}</span></label>`;
-  const REVEAL_CLAUSE = ` If I win a lucky draw, my first name, department and last 4 digits of my number may be shown to everyone in this engagement.`;
+  const REVEAL_CLAUSE = ` If I win a lucky draw, my first name, department and last 4 digits of my number may be shown to everyone in this game.`;
   const revealOn = () => !!(J.info && J.info.revealNames === true);
-  const CONSENT_BASE = `I agree to join. My name, mobile number and department are used to run this engagement. My ticket and phone details are <b>deleted within 24 hours</b> after it ends. My name and number are <b>kept for up to 365 days</b> so my organizer can invite me to future engagements, and I can ask them not to be kept at any time. <a href="/legal.html#privacy" target="_blank" rel="noopener">Privacy notice</a>`;
+  const CONSENT_BASE = `I agree to join. My name, mobile number and department are used to run this game. My ticket and phone details are <b>deleted within 24 hours</b> after it ends. My name and number are <b>kept for up to 365 days</b> so my organizer can invite me to future games, and I can ask them not to be kept at any time. <a href="/legal.html#privacy" target="_blank" rel="noopener">Privacy notice</a>`;
   const consentText = () => CONSENT_BASE.replace(' <a href="/legal.html#privacy"', (revealOn() ? REVEAL_CLAUSE : "") + ' <a href="/legal.html#privacy"');
 
   // ---------- state ----------
@@ -84,7 +84,7 @@
       <label class="lb" for="jCc">Country</label><select class="inp" id="jCc">${TB.countryOpts(J.cc)}</select>
       <label class="lb" for="jNum">Your mobile number</label><div class="phonein"><span id="jDial">+${dial(J.cc)}</span><input id="jNum" inputmode="tel" autocomplete="tel" placeholder="98765 43210" value="${esc(J.raw)}"></div>
       <p class="hint">Enter the number your organizer has for you. Any format works.</p><div id="jErr" role="alert"></div>
-      <button class="btn block" id="jGo" style="margin-top:12px">Join engagement ${ic("arrow")}</button>
+      <button class="btn block" id="jGo" style="margin-top:12px">Join game ${ic("arrow")}</button>
       <p class="tiny muted">No SMS or code is sent. Your number is only checked against the organizer's list. Your name and number are kept for up to 365 days so your organizer can invite you again, and you can ask us not to keep them.</p></div>`);
     $("jCc").onchange = () => { J.cc = $("jCc").value; $("jDial").textContent = "+" + dial(J.cc); };
     $("jNum").onkeydown = (e) => { if (e.key === "Enter") doJoin(); };
@@ -110,11 +110,11 @@
   function consentScreen(r) {
     show(`${ptop()}<div class="pcard"><div class="eyebrow">You're on the list</div><h2>Is this you?</h2>
       <div class="mname" aria-label="Masked name">${esc(r.name)}</div><p class="small muted" style="margin:0 0 8px">${r.e164Display ? "Number " + esc(r.e164Display) : ""}</p>
-      <p class="lead">Your full name appears on your ticket only. Other participants never see it.</p>
+      <p class="lead">Your full name appears on your ticket only. Other players never see it.</p>
       ${consentBox("cOk", consentText())}<div id="cErr" role="alert"></div>
       <button class="btn block" id="cGo">Yes, this is me. Join ${ic("arrow")}</button>
       <p class="center"><button class="linkbtn" id="cBack">No, use a different number</button></p>
-      <p class="tiny muted">This phone becomes your ticket. If you open the engagement on another phone, it will be blocked.</p></div>`);
+      <p class="tiny muted">This phone becomes your ticket. If you open the game on another phone, it will be blocked.</p></div>`);
     $("cBack").onclick = joinScreen;
     $("cGo").onclick = async () => {
       if (!$("cOk").checked) return inlineErr("cErr", "Please tick the box to join.");
@@ -129,7 +129,7 @@
       <p class="lead"><span class="mono">${esc(display || "")}</span> is not on the organizer's list. Send a request and the organizer can let you in.</p>
       <label class="lb" for="aName">Your name</label><input class="inp" id="aName" maxlength="30" autocomplete="name" placeholder="So the organizer knows you" value="${esc(J.name)}">
       <label class="lb" for="aInfo">Department or flat (optional)</label><input class="inp" id="aInfo" maxlength="30" placeholder="e.g. Finance, or B-402" value="${esc(J.info2)}">
-      ${consentBox("aOk", "I agree that my name and number are shared with the organizer for this engagement. My ticket and phone details are <b>deleted within 24 hours</b> after it ends. My name and number are <b>kept for up to 365 days</b> so the organizer can invite me again, unless I ask them not to be kept." + (revealOn() ? REVEAL_CLAUSE : ""))}<div id="aErr" role="alert"></div>
+      ${consentBox("aOk", "I agree that my name and number are shared with the organizer for this game. My ticket and phone details are <b>deleted within 24 hours</b> after it ends. My name and number are <b>kept for up to 365 days</b> so the organizer can invite me again, unless I ask them not to be kept." + (revealOn() ? REVEAL_CLAUSE : ""))}<div id="aErr" role="alert"></div>
       <button class="btn block" id="aGo">Ask to join ${ic("arrow")}</button>
       <p class="center"><button class="linkbtn" id="aBack">Use a different number</button></p></div>`);
     $("aBack").onclick = joinScreen;
@@ -177,7 +177,7 @@
       <p class="lead">From ${esc(r.engagement.orgName)}. It works on one phone only, so please do not forward it. Nothing to type.</p>
       ${r.engagement.startsAt ? `<div class="passbox"><span>Starts</span><b>${esc(TB.fmtDT(r.engagement.startsAt))}</b></div>` : ""}
       ${consentBox("pOk", consentText())}<div id="pErr" role="alert"></div>
-      <button class="btn block" id="pGo">Join engagement ${ic("arrow")}</button></div>`);
+      <button class="btn block" id="pGo">Join game ${ic("arrow")}</button></div>`);
     $("pGo").onclick = async () => {
       if (!$("pOk").checked) return inlineErr("pErr", "Please tick the box to join.");
       busy("pGo", true);
@@ -258,7 +258,7 @@
     if (G.status === "ended" || G.status === "purged") return endedScreen(G.status === "purged");
     show(`${ptop(true)}<div class="bp"><div class="bphd" id="hd"></div><div id="strip"></div><div id="still"></div><div id="boost"></div><div class="fields" id="fields"></div><div id="tabs"></div>
       <div class="tgrid" id="grid"></div><p class="pnote" id="pnote"></p><div id="notes"></div>
-      <div class="plegal">Closed-group engagement. The organizer gives all rewards. The software only calls numbers and checks claims.</div>
+      <div class="plegal">Closed-group game. The organizer gives all rewards. The software only calls numbers and checks claims.</div>
       <div class="plinks"><a href="/legal.html#rules" target="_blank" rel="noopener">Rules &amp; how to play</a><a href="/legal.html#privacy" target="_blank" rel="noopener">Privacy</a><a href="/legal.html#disclaimer" target="_blank" rel="noopener">Disclaimer</a></div>
       <div class="stub" id="stub"></div></div>`);
     paintAll();
@@ -315,7 +315,7 @@
       case "scratchAck": if (m.error) { if (MO.cur) MO.cur.sent = false; TB.toast(esc(m.error)); } else if (m.outcome) setScratchOutcome(m.outcome); break;
       case "jokerAck": onJokerAck(m); break;
       case "claimAck":
-        if (m.error) TB.toast(esc(m.error)); else TB.toast("Claim sent. The engagement pauses for everyone while it is checked.");
+        if (m.error) TB.toast(esc(m.error)); else TB.toast("Claim sent. The game pauses for everyone while it is checked.");
         break;
     }
   }
@@ -343,15 +343,15 @@
 
   function stripModel() {
     const p = G.pause && G.pause.kind;
-    if (G.status === "starting") return { cls: "", ball: ic("clock"), eb: "Engagement starting", ln: "The first number is coming", sub: `${ic("clock")} <span id="cds"></span> Your ticket is ready.` };
-    if (G.status === "open") return { cls: "", ball: ic("clock"), eb: "Engagement starts", ln: G.eng.startsAt ? TB.fmtDT(G.eng.startsAt) : "Soon", sub: "The organizer presses Start. The first number will appear here." };
+    if (G.status === "starting") return { cls: "", ball: ic("clock"), eb: "Game starting", ln: "The first number is coming", sub: `${ic("clock")} <span id="cds"></span> Your ticket is ready.` };
+    if (G.status === "open") return { cls: "", ball: ic("clock"), eb: "Game starts", ln: G.eng.startsAt ? TB.fmtDT(G.eng.startsAt) : "Soon", sub: "The organizer presses Start. The first number will appear here." };
     if (p === "claim") return { cls: "pz", ball: ic("pause"), eb: "Paused · claim received", ln: "Checking a claim...", sub: "The software is checking it. Everyone waits." };
     if (p === "result") {
       const it = (G.result && G.result.items) || [], any = it.some((x) => x.ok);
-      if (!it.length) return { cls: "pz", ball: ic("pause"), eb: "Result", ln: "Checking is done", sub: "The engagement continues in a few seconds." };
-      return { cls: any ? "okc" : "badc", ball: ic(any ? "check" : "x"), eb: any ? "Reward awarded" : "Not valid", ln: it.map((x) => x.ok ? x.reward : "Not valid").slice(0, 2).join(" · "), sub: "Checked by the software. The engagement continues in a few seconds." };
+      if (!it.length) return { cls: "pz", ball: ic("pause"), eb: "Result", ln: "Checking is done", sub: "The game continues in a few seconds." };
+      return { cls: any ? "okc" : "badc", ball: ic(any ? "check" : "x"), eb: any ? "Reward awarded" : "Not valid", ln: it.map((x) => x.ok ? x.reward : "Not valid").slice(0, 2).join(" · "), sub: "Checked by the software. The game continues in a few seconds." };
     }
-    if (p === "break") return { cls: "brk", ball: ic("play"), eb: "Brand break", ln: G.brk ? G.brk.title : "A short break", sub: "The engagement continues right after." };
+    if (p === "break") return { cls: "brk", ball: ic("play"), eb: "Brand break", ln: G.brk ? G.brk.title : "A short break", sub: "The game continues right after." };
     if (p === "intermission") return { cls: "brk", ball: ic("clock"), eb: "Break between rounds", ln: "Next round starts soon", sub: "Your new ticket appears here by itself." };
     if (p === "moment") return { cls: "pz", ball: ic("star"), eb: "A surprise is on", ln: "Numbers continue right after", sub: "Your ticket is safe." };
     if (p === "emergency") return { cls: "pz", ball: ic("pause"), eb: "Paused by the host", ln: G.pause.reason || "Please wait", sub: "Please wait. Your ticket is safe." };
@@ -364,7 +364,7 @@
     const tools = unlocked
       ? `<button class="spill icon ${TBAudio.enabled ? "on" : ""}" data-act="voice" aria-pressed="${TBAudio.enabled}" aria-label="Voice ${TBAudio.enabled ? "on" : "off"}" title="Voice ${TBAudio.enabled ? "on" : "off"}">${ic(TBAudio.enabled ? "vol" : "mute")}</button>`
       : `<button class="spill" data-act="audio">${ic("vol")} Join audio</button>`;
-    $("strip").innerHTML = `<div class="strip2 ${m.cls}"><div class="ball" aria-hidden="true">${m.ball}</div><div>${G.talk ? `<span class="talkchip">${ic("mic")} Host speaking</span><br>` : ""}<div class="seb">${m.eb}</div><div class="sln">${esc(m.ln)}</div><div class="ssub">${m.sub}</div></div><div class="tools">${tools}</div>${m.bar ? `<div class="sbar"><i id="cdb"></i></div>` : ""}</div>`;
+    $("strip").innerHTML = `<div class="strip2 ${m.cls}"><div class="ball" aria-hidden="true">${m.ball}</div><div>${G.talk ? `<span class="talkchip">${ic("mic")} Co-organizer speaking</span><br>` : ""}<div class="seb">${m.eb}</div><div class="sln">${esc(m.ln)}</div><div class="ssub">${m.sub}</div></div><div class="tools">${tools}</div>${m.bar ? `<div class="sbar"><i id="cdb"></i></div>` : ""}</div>`;
     tick();
   }
   function tick() {
@@ -381,7 +381,7 @@
 
   const cardNo = (id) => { const m = /-(\d{4,})-[ABC]$/.exec(id || ""); return m ? m[1] : ""; };
   function paintFields() {
-    $("fields").innerHTML = `<div><label>Participant</label><b>${esc(G.me.name)}</b></div><div><label>Date</label><b>${G.eng.startsAt ? esc(TB.fmtD(G.eng.startsAt)) : "-"}</b></div><div><label>Tickets</label><b>${G.tickets.length}</b></div>`;
+    $("fields").innerHTML = `<div><label>Player</label><b>${esc(G.me.name)}</b></div><div><label>Date</label><b>${G.eng.startsAt ? esc(TB.fmtD(G.eng.startsAt)) : "-"}</b></div><div><label>Tickets</label><b>${G.tickets.length}</b></div>`;
   }
   function paintTabs() {
     $("tabs").innerHTML = G.tickets.length < 2 ? "" : `<div class="tabs2" role="tablist" aria-label="Your tickets">${LET.slice(0, G.tickets.length).map((t) => `<button class="chip ${curTab() === t ? "on" : ""}" role="tab" aria-selected="${curTab() === t}" data-act="tab" data-arg="${t}">Ticket ${t} <span class="tiny">· ${G.cut[t].size} cut</span></button>`).join("")}</div>`;
@@ -416,7 +416,7 @@
     let h = "";
     if (G.me.blocked) h += `<div class="err" style="margin:0 12px 8px">${ic("lock")}<span>Your ticket is blocked after 2 Not valid claims. You can keep watching.</span></div>`;
     else if (G.me.notValid) h += `<div class="note warn" style="margin:0 12px 8px">${ic("alert")}<span>Not valid claims: ${G.me.notValid} of 2.</span></div>`;
-    if (G.me.kind === "family" && !G.eng.familyCanWin) h += `<div class="note" style="margin:0 12px 8px">${ic("info")}<span>In this engagement family members take part for fun. Valid claims are shown, but rewards go to employees.</span></div>`;
+    if (G.me.kind === "family" && !G.eng.familyCanWin) h += `<div class="note" style="margin:0 12px 8px">${ic("info")}<span>In this game family members take part for fun. Valid claims are shown, but rewards go to employees.</span></div>`;
     $("notes").innerHTML = h;
   }
 
@@ -456,7 +456,7 @@
     const out = [];
     if (G.wsEver && !G.wsOpen) out.push(`<div class="warn" role="status"><b>Reconnecting…</b>Your ticket is safe. Numbers continue when the connection returns.</div>`);
     const p = G.pause && G.pause.kind;
-    if (p === "claim") out.push(`<div class="info"><b>${ic("pause")} Checking a claim...</b>The engagement is paused for everyone for a moment.</div>`);
+    if (p === "claim") out.push(`<div class="info"><b>${ic("pause")} Checking a claim...</b>The game is paused for everyone for a moment.</div>`);
     if (p === "emergency") out.push(`<div class="warn"><b>${ic("pause")} Paused by the host</b>${esc(G.pause.reason || "Please wait.")}</div>`);
     if (G.result && G.result.items.length) {
       const it = G.result.items, any = it.some((x) => x.ok), me = it.some((x) => x.me);
@@ -523,7 +523,7 @@
     TB.sheet(`<div class="eyebrow">Confirm your claim</div><h2>${esc(R.name)}</h2><p class="muted small">${esc(PDESC[R.pattern] || "")}. Reward: ${esc(R.text)}.</p>
       ${multi && !two ? `<div class="chips" role="group" aria-label="Which ticket">${LET.slice(0, G.tickets.length).map((t) => `<button class="chip ${sel === t ? "on" : ""}" data-act="csel" data-arg="${t}" aria-pressed="${sel === t}">Ticket ${t}</button>`).join("")}</div>` : ""}
       <div class="bp" style="margin-top:10px">${two ? grid(0) + grid(1) : grid(Math.max(0, LET.indexOf(sel)))}</div>
-      <p class="tiny muted center">${R.pattern === "early5" ? "You need at least 5 cut numbers that have been called." : "Outlined numbers are the ones this reward needs. Make sure all are cut."} The engagement pauses for everyone while the software checks.</p>
+      <p class="tiny muted center">${R.pattern === "early5" ? "You need at least 5 cut numbers that have been called." : "Outlined numbers are the ones this reward needs. Make sure all are cut."} The game pauses for everyone while the software checks.</p>
       <button class="btn gold block" data-act="doclaim">${ic("trophy")} Confirm claim${multi && !two ? " for Ticket " + sel : ""}</button><button class="btn line block" data-act="close">Cancel</button>`);
   }
 
@@ -532,7 +532,7 @@
     const q = G.quotas, out = [];
     if (q.family && q.family.limit > 0) out.push(`<button data-act="fam">${ic("users")} Bring your family (${q.family.used}/${q.family.limit})</button>`);
     if (q.invites && q.invites.max > 0) out.push(`<button data-act="inv">${ic("mail")} Invite a colleague (${q.invites.used}/${q.invites.max})</button>`);
-    if (G.consoleLink) out.push(`<a href="${esc(G.consoleLink)}">${ic("sliders")} ${G.me.role === "host" ? "Host console" : "My Team Lead page"}</a>`);
+    if (G.consoleLink) out.push(`<a href="${esc(G.consoleLink)}">${ic("sliders")} ${G.me.role === "host" ? "Co-organizer console" : "My Team Lead page"}</a>`);
     out.push(`<button data-act="forget">${ic("trash")} Do not keep my details</button>`);
     out.push(`<a href="/legal.html#rules" target="_blank" rel="noopener">${ic("rules")} Rules &amp; how to play</a>`,
       `<a href="/legal.html#privacy" target="_blank" rel="noopener">${ic("shield")} Privacy &amp; your data</a>`,
@@ -566,8 +566,8 @@
         <button class="btn sm danger" data-pid="${esc(x.id)}" data-pa="cancel">${FS.cancelArm === x.id ? "Tap again to cancel" : "Cancel pass"}</button></div>` : ""}</div>`).join("");
     const full = used >= lim;
     TB.sheet(`<div class="eyebrow">${inv ? "Colleague invites" : "Family passes"} · ${used} of ${lim} used</div><h2>${inv ? "Invite a colleague" : "Bring your family"}</h2>
-      <p class="muted small">${inv ? "Your invite goes to the waiting room. The organizer decides." : `Each family member gets a personal pass for one phone. They ${G.eng.familyCanWin ? "can win rewards" : "take part for fun (no rewards in this engagement)"}. Family members cannot invite anyone.`}</p>
-      ${rows}${G.status !== "open" ? `<div class="err">${ic("lock")}<span>Entry is closed. The engagement has started.</span></div>` : full ? `<div class="err">${ic("alert")}<span>You have used all ${lim}.</span></div>` : `
+      <p class="muted small">${inv ? "Your invite goes to the waiting room. The organizer decides." : `Each family member gets a personal pass for one phone. They ${G.eng.familyCanWin ? "can win rewards" : "take part for fun (no rewards in this game)"}. Family members cannot invite anyone.`}</p>
+      ${rows}${G.status !== "open" ? `<div class="err">${ic("lock")}<span>Entry is closed. The game has started.</span></div>` : full ? `<div class="err">${ic("alert")}<span>You have used all ${lim}.</span></div>` : `
       <label class="lb" for="fName">Their name</label><input class="inp" id="fName" maxlength="30" value="${esc(FS.name)}" autocomplete="off">
       ${inv ? `<label class="lb" for="fInfo">Department or flat (optional)</label><input class="inp" id="fInfo" maxlength="30" value="${esc(FS.info)}">` : ""}
       <label class="lb" for="fCc">Country</label><select class="inp" id="fCc">${TB.countryOpts(FS.cc)}</select>
@@ -636,7 +636,7 @@
     let media = `<div class="card">${b.kind === "slides" ? "Presentation" : b.kind === "speech" ? "A short speech" : esc(b.title)}</div>`;
     if (b.kind === "youtube" && b.mediaUrl && ytId(b.mediaUrl)) media = `<iframe title="${esc(b.title)}" src="https://www.youtube-nocookie.com/embed/${enc(ytId(b.mediaUrl))}?autoplay=1&playsinline=1&rel=0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
     else if (b.kind === "file" && b.mediaUrl) media = `<video id="brkv" autoplay playsinline></video>`;
-    ov.innerHTML = `<div class="eyebrow">Brand break · ${esc(G.eng ? G.eng.orgName : "")}</div><h2>${esc(b.title)}</h2>${media}<div><div class="cnt" id="brkc">${secs}</div><div class="cntl" id="brkl">seconds left</div></div><div class="cntl">The engagement continues right after.</div>`;
+    ov.innerHTML = `<div class="eyebrow">Brand break · ${esc(G.eng ? G.eng.orgName : "")}</div><h2>${esc(b.title)}</h2>${media}<div><div class="cnt" id="brkc">${secs}</div><div class="cntl" id="brkl">seconds left</div></div><div class="cntl">The game continues right after.</div>`;
     document.body.appendChild(ov);
     paintStrip(); paintBanner();
     const v = $("brkv");
@@ -672,10 +672,10 @@
     const mine = new Set(Object.values(G.ids || {}).filter(Boolean));
     const won = (G.rewards || []).map(parseR).filter((r) => (r.winners || []).some((w) => mine.has(w)));
     show(`${ptop()}<div class="pcard center"><div class="res ok">${ic("flag")}</div><h2>Thank you for taking part</h2>
-      <p class="lead">${deleted ? "This engagement has ended and its data has been deleted." : G.rounds > 1 ? "All rounds are finished." : "The engagement has ended."} The organizer gives the rewards directly. The software only called numbers and checked claims.</p>
+      <p class="lead">${deleted ? "This game has ended and its data has been deleted." : G.rounds > 1 ? "All rounds are finished." : "The game has ended."} The organizer gives the rewards directly. The software only called numbers and checked claims.</p>
       ${won.length ? `<div class="note ok" style="text-align:left">${ic("trophy")}<span>Your ticket won: <b>${won.map((r) => esc(r.name)).join(", ")}</b>. Your organizer will give the reward.</span></div>` : ""}
       ${deleted ? "" : `<p class="tiny muted">Your ticket and phone details are deleted within 24 hours. Your name and number are kept for up to 365 days so your organizer can invite you again.</p><button class="btn line block" data-act="forget">${ic("trash")} Do not keep my details</button>`}</div>
-      <div class="plegal">Closed-group engagement. The organizer gives all rewards. The software only calls numbers and checks claims.</div>
+      <div class="plegal">Closed-group game. The organizer gives all rewards. The software only calls numbers and checks claims.</div>
       <div class="plinks"><a href="/legal.html#rules" target="_blank" rel="noopener">Rules</a><a href="/legal.html#privacy" target="_blank" rel="noopener">Privacy</a><a href="/legal.html#disclaimer" target="_blank" rel="noopener">Disclaimer</a></div>`);
   }
 
