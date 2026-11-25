@@ -7,6 +7,7 @@ import { PRIZE_HOUSES } from "../../../packages/beacon/src/config";
 import { ordinalName } from "../../../packages/shared/src/ordinal";
 import { openPii } from "./pii";
 import { sha, randHex, type V2Ctx } from "./v2-types";
+import { MARK139_CSS, MARK139_HTML } from "./mark139";
 
 const HOUSE: Record<string, string> = Object.fromEntries(PRIZE_HOUSES.map((h) => [h.id, h.label]));
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]!));
@@ -102,7 +103,7 @@ export async function certsRoute(c: V2Ctx, eid: string, rest: string): Promise<R
 
 function certificateHtml(o: { who: string; ticket: number; prize: string; reward: string; gameId: string; gameName: string; issued: number; url: string; id: string }): string {
   const day = new Date(o.issued + 19_800_000).toISOString().slice(0, 10);
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Certificate: ${esc(o.prize)}</title><style>body{font-family:Georgia,serif;margin:0;padding:24px;background:#fff;color:#1a2233}.c{max-width:760px;margin:0 auto;border:6px double #c9a24a;padding:40px;text-align:center}h1{margin:0 0 6px;font-size:2rem;color:#0b3d91}.w{font-size:1.9rem;margin:18px 0;border-bottom:1px solid #c9a24a;display:inline-block;padding:0 24px}p{margin:8px 0;font-size:1.05rem}.s{font-size:.8rem;color:#555;margin-top:26px;word-break:break-all}</style></head><body><div class="c"><h1>Certificate of winning</h1><p>${o.gameName ? esc(o.gameName) + " &middot; " : ""}Game ${esc(o.gameId)}</p><p>This certifies that</p><div class="w">${o.who ? esc(o.who) : "Ticket No. " + o.ticket}</div><p>${o.who ? "holding Ticket No. " + o.ticket + " " : ""}won <b>${esc(o.prize)}</b>${o.reward ? " (" + esc(o.reward) + ")" : ""}</p><p>${esc(day)}</p><p class="s">Check that this certificate is real: ${esc(o.url)}<br>Certificate ${esc(o.id)}</p></div></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Certificate: ${esc(o.prize)}</title><style>${MARK139_CSS}body{font-family:Georgia,serif;margin:0;padding:24px;background:#fff;color:#1a2233}.c{max-width:760px;margin:0 auto;border:6px double #c9a24a;padding:40px;text-align:center}h1{margin:0 0 6px;font-size:2rem;color:#0b3d91}.w{font-size:1.9rem;margin:18px 0;border-bottom:1px solid #c9a24a;display:inline-block;padding:0 24px}p{margin:8px 0;font-size:1.05rem}.s{font-size:.8rem;color:#555;margin-top:26px;word-break:break-all}</style></head><body>${MARK139_HTML}<div class="c"><h1>Certificate of winning</h1><p>${o.gameName ? esc(o.gameName) + " &middot; " : ""}Game ${esc(o.gameId)}</p><p>This certifies that</p><div class="w">${o.who ? esc(o.who) : "Ticket No. " + o.ticket}</div><p>${o.who ? "holding Ticket No. " + o.ticket + " " : ""}won <b>${esc(o.prize)}</b>${o.reward ? " (" + esc(o.reward) + ")" : ""}</p><p>${esc(day)}</p><p class="s">Check that this certificate is real: ${esc(o.url)}<br>Certificate ${esc(o.id)}</p></div></body></html>`;
 }
 
 /** GET /api/v2/verify/{id}: PUBLIC. Says only what the record holds, which is nothing personal. */

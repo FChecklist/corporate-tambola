@@ -2,6 +2,17 @@
 
 Newest first. The owner-only release list the site reads is `apps/edge/src/releases.json`; this file adds the PR and audit lines the version standard asks for (marketing-ledger/plans/VERSION-AND-KNOWLEDGE-STANDARD-2026-11-20.md). Earlier releases (1.0.0 to 1.9.0) are in `releases.json`.
 
+## 1.11.3 - 2026-11-25
+Owner order of 25 Nov 2026 (the same change in every FChecklist repository): the small mark `१३९` at the very top centre of every page. Not deployed. Nothing else changed.
+### Added
+- The mark `<div class="mark139" lang="hi" aria-hidden="true"><span>१३९</span></div>` is the first child of `<body>` in every static page in `apps/web/public` (also `pack/gamelog.html`) and in every page the worker or the billing package builds (`admin.ts` back-soon page, `people.ts` invitation and not-valid pages, `v2-certs.ts` certificate, `trust-page.ts`, `packages/billing` invoice). The CSS is in each page; `z.html` and `zc.html` (style-src 'self') get it from `app.css`. The shared source for the worker pages is `apps/edge/src/mark139.ts`.
+- The invoice fragment shown on the payment-done screen drops the mark (that screen already has its own), so it is never shown twice.
+- `zsw.js` cache `ct-game-v47` to `ct-game-v48` so saved copies get the mark.
+- Guard test `apps/edge/test/mark139.test.ts`: every page source has exactly one mark and the approved CSS and numerals.
+- `trust.html` is written again by `tools/make-trust.ts` so it matches the generator (its two tests failed on the hand-edited copy); the guard test now walks every html page under `apps/web/public` in all folders, not a fixed list.
+### Not done
+- E-mails (`brand.ts`, `report-email.ts`) are not pages and were left alone. Pictures: no SVG banner exists; raster pictures (`og-tambola.png`, `img/*`) are untouched. Design, reference and prototype HTML under `design/`, `docs/mock/`, `reference/`, `tools/` are not product pages.
+
 ## 1.11.2 - 2026-11-21
 Release on top of 1.11.1 (PR #38, same branch, head `0b2155e` before this one). 1.11.0 is the live release (commit `8a4a0bed`, Cloudflare Pages deployment `1366bf89`, rollback `edd21023` = 1.10.2); neither 1.11.1 nor 1.11.2 is deployed. Needs two independent audits on the exact head commit before any deploy. Money flag `PAY_VIA_MONEYPENNY` stays off; no payment code is touched. Payments still go only through IT Services by Rajat Agarwal and Razorpay.
 ### Why a new version

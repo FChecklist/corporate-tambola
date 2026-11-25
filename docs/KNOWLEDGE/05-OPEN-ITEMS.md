@@ -45,5 +45,8 @@ See `09-RELEASE-1.11.0.md`, section Open: migration 0033 before deploy, the Clou
 ## Release 1.11.1 (21 Nov 2026): what is open
 See `10-RELEASE-1.11.1.md`, section Open: two audits on the exact head commit, then a deploy. Still open by choice: a bot check (Turnstile) on the Refer & earn code and the sign-in code; the sign-in code has no site-wide cap; owner e-mail for the 80 % and 100 % alerts; `List-Unsubscribe` on bulk mail; a game-level hostile-join test; (the test files and `tools/` that used the owner's address as a fixture were cleaned in 1.11.2).
 
+## Release 1.11.3 (25 Nov 2026): what is open
+See `12-RELEASE-1.11.3.md`: the mark १३९ is on every page; e-mails and raster pictures have none; audits and a deploy are still needed.
+
 ## Release 1.11.2 (21 Nov 2026): what is open
 See `11-RELEASE-1.11.2.md`, section Open: two audits on the exact head commit, then a deploy. The caps are a ceiling, not a lock: with many networks and many helper accounts the site-wide caps (30 data-request mails to the owner a day, 30 Help Desk invitations an hour) can still be filled, and then real helpers wait. The owner's old address is still in the history of git (a pull request cannot remove it). Still open by choice: Turnstile, `List-Unsubscribe`, owner e-mail for the 80 % and 100 % alerts, a site-wide cap on the sign-in code.

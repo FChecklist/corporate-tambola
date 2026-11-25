@@ -19,6 +19,7 @@ import type { D1, Env } from "./worker";
 import { normAccountEmail } from "./empid";
 import { logMail } from "./mode";
 import { hashMail, isHardBounce, lanesTick, mailStatus, mailStatusCached, publicMailStatus, recordState, suppress, suppressKey, type LaneEnv } from "./mail-lanes";
+import { MARK139_CSS, MARK139_HTML } from "./mark139";
 
 export const GAME_NAME = "Corporate Tambola";
 export interface AdminEnv extends Env, LaneEnv { RESEND_WEBHOOK_SECRET?: string; MAIL_FROM?: string; CF_EMAIL_TOKEN?: string; CF_ACCOUNT_ID?: string }
@@ -62,7 +63,7 @@ export const OFF_EXEMPT = (p: string): boolean =>
   p === "/api/mode" || p.startsWith("/api/owner/") || p === "/api/status/health" || p === "/api/status/mail" || p === "/api/lifecycle/tick" || p === "/api/payments/webhook" || p === "/api/mail/events" || p === "/api/inbound-email";
 
 const BACK_SOON_TEXT = "Back soon. We are making a small change. Please try again in a few minutes.";
-const backSoonPage = () => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Back soon | ${GAME_NAME}</title><style>body{font:18px/1.5 system-ui,sans-serif;margin:0;display:grid;place-items:center;min-height:100vh;padding:24px;text-align:center;color:#14213d;background:#fff}h1{margin:0 0 8px;font-size:28px}p{margin:0;max-width:30em}</style></head><body><main><h1>Back soon</h1><p>We are making a small change. Please try again in a few minutes.</p></main></body></html>`;
+const backSoonPage = () => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Back soon | ${GAME_NAME}</title><style>${MARK139_CSS}body{font:18px/1.5 system-ui,sans-serif;margin:0;display:grid;place-items:center;min-height:100vh;padding:24px;text-align:center;color:#14213d;background:#fff}h1{margin:0 0 8px;font-size:28px}p{margin:0;max-width:30em}</style></head><body>${MARK139_HTML}<main><h1>Back soon</h1><p>We are making a small change. Please try again in a few minutes.</p></main></body></html>`;
 /** The 503 every public address answers while the site is off: a plain page for a browser, JSON for everything else. */
 export function backSoon(req: Request): Response {
   const wantsPage = req.method === "GET" && (req.headers.get("accept") ?? "").includes("text/html");
