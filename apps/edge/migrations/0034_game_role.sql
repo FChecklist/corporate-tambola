@@ -5,3 +5,5 @@ CREATE INDEX IF NOT EXISTS game_role_eid ON game_role(eid);
 CREATE INDEX IF NOT EXISTS game_role_person ON game_role(email_hash);
 CREATE TABLE IF NOT EXISTS console_jti (jti TEXT PRIMARY KEY, exp_s INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS console_handoff (token_hash TEXT PRIMARY KEY, eid TEXT NOT NULL, kind TEXT NOT NULL, org TEXT NOT NULL, created_by TEXT NOT NULL, expires_ms INTEGER NOT NULL);
+-- one row per Moneypenny order the console has told this game about (state marking -> paid): a game is marked paid once per order id
+CREATE TABLE IF NOT EXISTS console_paid (order_ref TEXT PRIMARY KEY, eid TEXT NOT NULL, state TEXT NOT NULL, at_ms INTEGER NOT NULL);

@@ -5,7 +5,7 @@ Newest first. The owner-only release list the site reads is `apps/edge/src/relea
 ## 1.12.0 - 2026-11-27
 Seg 3, Tambola first (owner order 27 Nov 2026, MONEY-LOGIC: product -> console -> Moneypenny Credits -> IT Services -> Razorpay). PR 43, branch `seg3/tambola-pay-via-console`. Not deployed.
 ### Added
-- Console pay step on the bridge: `POST /api/console/payable` (read-only: owner, size, paid) and `POST /api/console/paid` (idempotent by `orderRef`), adapter `payInfo`/`markPaid` in `console-adapter.ts`. Bridge re-vendored from the console repo; migration `0034_game_role.sql`.
+- Console pay step on the bridge: `POST /api/console/payable` (read-only: owner, size, paid) and `POST /api/console/paid` (idempotent by `orderRef`), adapter `payInfo`/`markPaid` in `console-adapter.ts`. Bridge re-vendored from the console repo; migration `0034_game_role.sql` (now also creates `console_paid`, found by the round-2 audit).
 - Flag `PAY_VIA_CONSOLE=1`: checkout, proforma, pay-with-credit, credit, verify, test payments and pay links answer 410; `placeOrder` opens no order (fault F2 closed); the old credit and ledger C jobs stop. Razorpay's webhook stays open so an earlier payment is still recorded.
 ### Rollback
 Unset the flag: the old own-payment code, tables and jobs are unchanged and run again. Nothing was deleted.
