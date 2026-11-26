@@ -40,6 +40,9 @@ import { CREDIT_SCHEMA, activeCreditSummary, creditAppliedFor, creditLastDay, cr
 import { cloneGame } from "./clone";
 import { acceptOver, acceptWon, endBoundMs, realEndMs, neverStarted, eraseEverything, erasePersonal, erasureOf, fullDeleteAt, lifecycleTick, MAX_AHEAD_MS, personalDeleteAt, SETTINGS_KEEP_MS, recordWinners, reportApi, reportLink } from "./lifecycle";
 import { PAY_SCHEMA, drainBulkMail, issueDueInvoices, payRoute, retryOutbox, retryRecentOutbox, sendMail, freeLaunch, payMode, FREE_CAP, MAX_DRAFTS, type PayEnv } from "./pay";
+import { handleConsole } from "./console-bridge/bridge";
+import { BRIDGE_SCHEMA } from "./console-bridge/schema";
+import { consoleAdapter, CONSOLE_KEY_LABEL, keyGameEnded, scopedKeyMayCall, payViaConsoleBlock } from "./console-adapter";
 import { PACKS, price } from "../../../packages/shared/src/pricing";
 import { PARTNER_SCHEMA, partnerRoute } from "./partners";
 import { HELPDESK_SCHEMA, HELPER_MANUAL_NOTE, helpdeskCloseStatements, helpdeskRoute, helpdeskSweep, isDeskKeyId, isHelperKey, noteHelperGame } from "./helpdesk";
@@ -94,6 +97,8 @@ export interface Env {
   ANALYZE_AI_URL?: string; ANALYZE_AI_KEY?: string; ANALYZE_AI_MODEL?: string;
   /** Optional and public (it is not a secret): the Google sign-in client id. Without it the "Continue with Google" button is hidden and /api/auth/google answers 404. */
   GOOGLE_CLIENT_ID?: string;
+  /** Master console (console-bridge/): the console's public signing keys as "k1:<key>,k2:<key>" (a plain setting, not a secret). Empty means the bridge is dark and every /api/console/ address answers 404. CONSOLE_ORIGIN: where invited helpers are sent to accept. */
+  CONSOLE_PUBKEYS?: string; CONSOLE_ORIGIN?: string;
 }
 const controlKey = (id: string) => `c/${id}.json`;
 const controlUrl = (env: Env, id: string) => (env.CONTROL_BASE && env.CONTROL_R2 ? `${env.CONTROL_BASE.replace(/\/$/, "")}/${controlKey(id)}` : null);
@@ -253,6 +258,8 @@ export const SCHEMA: string[] = [
   ...V2_SCHEMA,
   // mail lanes (1.11.0, 0033_mail_lanes.sql): the send counter, the per-mail state from the provider, the do-not-mail list, the waiting bulk mail (mail-lanes.ts)
   ...MAIL_LANES_SCHEMA,
+  // the master console bridge (migration game_role): who may do what in one game by e-mail, assertion ids used, one-time hand-off links
+  ...BRIDGE_SCHEMA,
 ];
 
 const PATTERNS = new Set<string>([...HOUSE_ORDER.filter((k) => k !== "unlucky"), "lucky"]);
@@ -483,7 +490,7 @@ const BUSY = () => json({ error: "It is very busy right now. Please try again in
 /** What one successful join writes to the database (participant, seat, person/consent/audit rows ...: counted ~9 on the 1.1.x logs). The daily write guard charges this, so "2,000,000 writes a day" means writes, not joins x 3. */
 const JOIN_WRITES = 9;
 
-const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type, x-organizer, x-partner, authorization, x-ct-vid, x-ct-vs", "access-control-allow-methods": "GET, POST, PUT, PATCH, OPTIONS", "access-control-max-age": "86400" };
+const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type, x-organizer, x-partner, authorization, x-ct-vid, x-ct-vs, x-console-step", "access-control-allow-methods": "GET, POST, PUT, PATCH, OPTIONS", "access-control-max-age": "86400" };
 /** Phones load the app from Pages and call this Worker from another origin, so every answer carries open CORS (no cookies are used anywhere). */
 /** The message an organizer pastes into any AI chat: two short lines and the short link (/ai/<key>), which opens the complete manual. The key is only inside the link. The AI key cannot pay, publish, delete, pause or settle. */
 export const aiMessage = (origin: string, key: string) => aiPaste(origin, key);
@@ -594,7 +601,7 @@ export async function runTick(env: Env, now: number) {
   await adminTick(env.DB, now); // old error counters and old mail events go (admin.ts)
   await remindUnpaid(env, now);
   await remindDrafts(env, now);
-  const ledgerC = await ledgerCTick(env as PayEnv, now); // ledger C -> B: a few commission rows and, every 30 minutes, the monthly figures (ledgerc.ts)
+  const ledgerC = (env as PayEnv).PAY_VIA_CONSOLE === "1" ? null : await ledgerCTick(env as PayEnv, now); // off when payments go through the console (the old own-payment ledger job); // ledger C -> B: a few commission rows and, every 30 minutes, the monthly figures (ledgerc.ts)
   const life = await lifecycleTick(env as any, now);
   const purged = await purgeOld(env, now);
   const mailRetried = await retryRecentOutbox(env as PayEnv, now).catch(() => 0); // a mail that failed (an invoice, a paid note) is tried again within minutes, not at the next daily job (RCA 2026-11-20)
@@ -840,7 +847,7 @@ function d1kv(env: Env): KV { return {
   put: async (k, v) => { await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(k, v).run(); },
 }; }
 
-export interface Auth { plat: boolean; org: string | null; kind: "platform" | "master" | "ai" | "host" | "cohost" | null; /** V2: hash of the key presented, its private label, and (for a key made for ONE game) the game, the kind (gm, ga, lh) and the game it was cloned from */ kh?: string; label?: string | null; scopeEid?: string | null; scopeKind?: "gm" | "ga" | "lh" | null; scopeSrc?: string | null; viaLink?: boolean; eid?: string | null; /** A Host: the identity the key belongs to and whether the first-open setup (confirmed e-mail + mobile) is finished. */ hid?: string; hostReady?: boolean ; temp?: boolean ; /** The 30-minute key of the Help Desk one-tap publish approval (organizer_key.created_by = 'dp'): it publishes ONE game and does nothing else (see route()). */ pubOnly?: boolean }
+export interface Auth { plat: boolean; org: string | null; kind: "platform" | "master" | "ai" | "host" | "cohost" | null; /** V2: hash of the key presented, its private label, and (for a key made for ONE game) the game, the kind (gm, ga, lh) and the game it was cloned from */ kh?: string; label?: string | null; scopeEid?: string | null; scopeKind?: "gm" | "ga" | "lh" | null; scopeSrc?: string | null; console?: boolean; viaLink?: boolean; eid?: string | null; /** A Host: the identity the key belongs to and whether the first-open setup (confirmed e-mail + mobile) is finished. */ hid?: string; hostReady?: boolean ; temp?: boolean ; /** The 30-minute key of the Help Desk one-tap publish approval (organizer_key.created_by = 'dp'): it publishes ONE game and does nothing else (see route()). */ pubOnly?: boolean }
 async function authOf(req: Request, env: Env, now: number): Promise<Auth> {
   return authOfKey(env, req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, ""), now, true);
 }
@@ -851,6 +858,10 @@ export async function authOfKey(env: Env, presented: string, now: number, gated 
   const kh = await sha("key|" + presented);
   const row = await env.DB.prepare("SELECT org, kind, eid, host_id, expires_ms, created_by, label, scope_eid, scope_kind, scope_src FROM organizer_key WHERE hash=? AND revoked=0 AND (expires_ms IS NULL OR expires_ms>?)").bind(kh, now).first<{ org: string; kind: "master" | "ai" | "host" | "cohost"; eid: string | null; host_id: string | null; expires_ms: number | null; created_by: string | null; label: string | null; scope_eid: string | null; scope_kind: "gm" | "ga" | "lh" | null; scope_src: string | null }>();
   if (!row || (row.scope_eid && !gated)) return { plat: false, org: null, kind: null };
+  if (row.label === CONSOLE_KEY_LABEL) { // a key made by the master console: no Host first-open setup (the console proved the mailbox); one tied to a game stops the moment that game is over
+    if (row.eid && (await keyGameEnded(env, row.eid, now))) return { plat: false, org: null, kind: null };
+    return { plat: false, org: row.org, kind: row.kind, eid: row.eid ?? null, console: true, ...(row.kind === "host" ? { hostReady: true } : {}) };
+  }
   if (row.kind === "host") { // a Host's first-open link works once and for 7 days; the console works only after setup (hostsetup.ts)
     const hs = await hostKeyStatus(env.DB, kh, row.host_id, now);
     if (!hs.usable) return { plat: false, org: null, kind: null };
@@ -860,12 +871,16 @@ export async function authOfKey(env: Env, presented: string, now: number, gated 
   }
   return { plat: false, org: row.org, kind: row.scope_kind === "ga" ? "ai" : row.kind, eid: row.eid ?? null, kh, label: row.label, ...(row.scope_eid ? { scopeEid: row.scope_eid, scopeKind: row.scope_kind, scopeSrc: row.scope_src } : {}), ...(row.kind === "master" && row.created_by === "dp" ? { pubOnly: true } : {}) };
 }
+/** A key made by the master console and tied to one game works for that game only (console-bridge/bridge.ts keyFitsGame). Every other key is unchanged. A game without an id fails closed. */
+const gameFits = (a: Auth, e: { id?: string }) => !(a.console && a.eid) || a.eid === e.id;
 /** May this caller act on this engagement? `master` = needs the organizer's own key, or a Host's (both are people, never the AI), or ours. A Co-host never passes: their rights are a few named routes only. */
-const can = (a: Auth, e: { org: string | null }, master = false) => a.plat || (!!a.org && e.org === a.org && a.kind !== "cohost" && (!master || a.kind === "master" || (a.kind === "host" && !a.viaLink)));
+const can = (a: Auth, e: { org: string | null; id?: string }, master = false) => a.plat || (!!a.org && e.org === a.org && gameFits(a, e) && a.kind !== "cohost" && (!master || a.kind === "master" || (a.kind === "host" && !a.viaLink)));
 /** The organizer's own key, a Host's, their AI's key, or ours. */
-const canAi = (a: Auth, e: { org: string | null }) => a.plat || (!!a.org && e.org === a.org && (a.kind === "master" || a.kind === "ai" || (a.kind === "host" && !a.viaLink)));
+const canAi = (a: Auth, e: { org: string | null; id?: string }) => a.plat || (!!a.org && e.org === a.org && gameFits(a, e) && (a.kind === "master" || a.kind === "ai" || (a.kind === "host" && !a.viaLink)));
 /** May this caller pay for this game (so credit is shown to them)? The Organizer, a Host or a Co-host of that game; never an AI key or a work link. */
-const mayPay = (a: Auth, e: { id: string; org: string | null }) => !!a.org && e.org === a.org && !a.viaLink && (a.kind === "master" || a.kind === "host" || (a.kind === "cohost" && (!a.eid || a.eid === e.id)));
+const mayPay = (a: Auth, e: { id: string; org: string | null }) => !!a.org && e.org === a.org && gameFits(a, e) && !a.viaLink && (a.kind === "master" || a.kind === "host" || (a.kind === "cohost" && (!a.eid || a.eid === e.id)));
+/** The three rules above, for tests only (console-bridge.test.ts proves what a key tied to one game may and may not do). */
+export const __authRules = { can, canAi, mayPay };
 /** The credit fields a caller who may pay sees: their account's active credit (a number), when it next lapses, and how much of it is already applied to THIS game. Everyone else: null. */
 async function creditFields(env: Env, a: Auth, e: { id: string; org: string | null; cap: number }, open: boolean, now: number) {
   if (!open || !mayPay(a, e)) return { credit: null, creditExpiresMs: null, creditApplied: null };
@@ -954,7 +969,9 @@ export const AI_MANIFEST = {
 
 /** Every call made with an organizer's AI key is written to an audit trail (when, which key, what was asked, the answer, and where it came from). */
 async function route(req: Request, env: Env, now: number): Promise<Response> {
+  { const cr = await handleConsole(consoleAdapter(now), req, env); if (cr) return cr; } // the master console bridge: dark (null) unless CONSOLE_PUBKEYS is set
   const a = await authOf(req, env, now);
+  if (a.console && a.eid && !scopedKeyMayCall(a.eid, req.method, new URL(req.url).pathname)) return json({ error: "This sign-in is for one game only. Open the console to see your other games." }, 403);
   if (a.kind === "host" && req.headers.get("x-ct-link") === "1") a.viaLink = true; // a Host's AI work link keeps the narrow rights
   if (a.viaLink && /^\/api\/(payments\/|org\/(team|cohost))/.test(new URL(req.url).pathname)) return json({ error: "A Host's AI assistant cannot pay or manage the team. The Host does this in their own console.", code: "ai-not-allowed" }, 403); // paying and who is on the team are for people
   if (a.pubOnly) { // the Help Desk approval key (30 minutes, handed out by the public /api/helpdesk/approve/start): it is a full account key in form, so it is cut down here to what the one-tap page needs, a publish of the approved game and the key check (GET /api/whoami), nothing else (no money, no erase, no team, no keys, no other game)
@@ -1028,6 +1045,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   { const rm = p.match(/^\/api\/report\/([A-Za-z0-9_-]{4,40})$/); if (rm && req.method === "GET") return reportApi(env as any, rm[1]!, url, now); } // the report page; the key in the link is the only credential
   // 1.8.3: a Co-host who accepted the role under an OLDER terms version keeps working (anyVersion = true): a version string never locks anyone out mid-game; only a NEW acceptance carries the current version
   if (a.kind === "cohost" && req.method === "POST" && (p === "/api/checkout" || /^\/api\/z\/[A-Za-z0-9_-]{4,40}\/pay-with-credit$/.test(p) || p === "/api/proforma" || p === "/api/payments/test" || p === "/api/org/credit" || p.startsWith("/api/org/credit/")) && !(await hasConsent(env.DB, "c:" + (await sha("key|" + (req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")))).slice(0, 16), "K5", true))) return json({ error: "Please tick the box to continue.", code: "consent-required", kind: "K5", version: CONSENT_VERSION }, 400); // a Co-host pays and uses credit only after accepting the role (these routes run before the general K5 gate below)
+  { const pb = payViaConsoleBlock(env as PayEnv, req.method, p); if (pb) return pb; } // PAY_VIA_CONSOLE=1: the game's own pay, credit and proforma routes are shut (console-adapter.ts)
   const paid = await payRoute(req, env as PayEnv, now, (n) => spend(env, now, n));
   if (paid) return paid;
   { const cr = await creditRoute(req, env as PayEnv, now, (n) => spend(env, now, n), a); if (cr) return cr; } // credit instead of refunds: the account's credit, and paying a game with it (credit.ts)

@@ -18,9 +18,9 @@ const T = Date.UTC(2026, 10, 21, 10, 0, 0);
 
 describe("1.11.2: the version rule (a change after a deploy is a new version)", () => {
   test("releases.json (it feeds the footer, /version.json and the owner's release page), package.json, CHANGELOG and the knowledge page all say 1.11.2, with 1.11.1 and 1.11.0 right under it", () => {
-    expect(rel.slice(0, 3).map((r) => r.version)).toEqual(["1.11.2", "1.11.1", "1.11.0"]);
-    expect(rel[0]!.date).toMatch(/^2026-11-2\d$/); expect(rel[0]!.changes.length).toBeGreaterThan(3);
-    expect(JSON.parse(read("package.json")).version).toBe(rel[0]!.version);
+    expect(rel.slice(1, 4).map((r) => r.version)).toEqual(["1.11.2", "1.11.1", "1.11.0"]);
+    expect(rel[1]!.date).toMatch(/^2026-11-2\d$/); expect(rel[1]!.changes.length).toBeGreaterThan(3);
+    expect(JSON.parse(read("package.json")).version).toBe(rel[0]!.version); expect(rel[0]!.version).toBe("1.12.0");
     const log = read("CHANGELOG.md");
     expect(log).toMatch(/^## 1\.11\.2 - 2026-11-2\d$/m); expect(log.indexOf("## 1.11.2")).toBeLessThan(log.indexOf("## 1.11.1"));
     expect(existsSync(join(ROOT, "docs/KNOWLEDGE/11-RELEASE-1.11.2.md"))).toBe(true);
@@ -32,7 +32,7 @@ describe("1.11.2: the version rule (a change after a deploy is a new version)", 
     for (const c of rel[0]!.changes) { expect(c).not.toMatch(/`|\.ts\b|\.js\b|DATAREQ_|HD_INVITE|kv\b/); expect(c.length).toBeLessThan(520); }
   });
   test("the 1.11.1 entry does not promise more than it did: it says one GAME, and points to 1.11.2 for the rest", () => {
-    expect(rel[1]!.changes[0]).toMatch(/ONE game/); expect(rel[1]!.changes[0]).toContain("1.11.2");
+    expect(rel[2]!.changes[0]).toMatch(/ONE game/); expect(rel[2]!.changes[0]).toContain("1.11.2");
   });
 });
 

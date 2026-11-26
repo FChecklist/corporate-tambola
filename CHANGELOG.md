@@ -2,6 +2,16 @@
 
 Newest first. The owner-only release list the site reads is `apps/edge/src/releases.json`; this file adds the PR and audit lines the version standard asks for (marketing-ledger/plans/VERSION-AND-KNOWLEDGE-STANDARD-2026-11-20.md). Earlier releases (1.0.0 to 1.9.0) are in `releases.json`.
 
+## 1.12.0 - 2026-11-27
+Seg 3, Tambola first (owner order 27 Nov 2026, MONEY-LOGIC: product -> console -> Moneypenny Credits -> IT Services -> Razorpay). PR 43, branch `seg3/tambola-pay-via-console`. Not deployed.
+### Added
+- Console pay step on the bridge: `POST /api/console/payable` (read-only: owner, size, paid) and `POST /api/console/paid` (idempotent by `orderRef`), adapter `payInfo`/`markPaid` in `console-adapter.ts`. Bridge re-vendored from the console repo; migration `0034_game_role.sql` (now also creates `console_paid`, found by the round-2 audit).
+- Flag `PAY_VIA_CONSOLE=1`: checkout, proforma, pay-with-credit, credit, verify, test payments and pay links answer 410; `placeOrder` opens no order (fault F2 closed); the old credit and ledger C jobs stop. Razorpay's webhook stays open so an earlier payment is still recorded.
+### Rollback
+Unset the flag: the old own-payment code, tables and jobs are unchanged and run again. Nothing was deleted.
+### Audit
+Independent audit of the first head: FAIL (H1 pay-link routes, H2 test allow-list, M1 tests, M4 version). Fixed in this release.
+
 ## 1.11.2 - 2026-11-21
 Release on top of 1.11.1 (PR #38, same branch, head `0b2155e` before this one). 1.11.0 is the live release (commit `8a4a0bed`, Cloudflare Pages deployment `1366bf89`, rollback `edd21023` = 1.10.2); neither 1.11.1 nor 1.11.2 is deployed. Needs two independent audits on the exact head commit before any deploy. Money flag `PAY_VIA_MONEYPENNY` stays off; no payment code is touched. Payments still go only through IT Services by Rajat Agarwal and Razorpay.
 ### Why a new version

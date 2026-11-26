@@ -1,5 +1,18 @@
 [
   {
+    "version": "1.12.0",
+    "date": "2026-11-27",
+    "releasedAtIST": "27 Nov 2026, time set at deploy",
+    "commit": "this release",
+    "title": "Payments for a game are made in the console only; this game no longer takes payment itself when the switch is on",
+    "changes": [
+      "Behind a switch (off until the owner turns it on), the game takes no payment of its own: the pay, pay-link, credit and price-quote addresses answer that payment is made in the console, and no payment order is ever opened from the game, not even when something is down",
+      "The console tells the game a game is paid (signed, used once, safe to repeat) and the game unlocks that one game; the game asks the console's note only for who owns the game and which size it is",
+      "No money, invoice or commission is recorded by the game for such a payment: the console, Moneypenny credits and IT Services keep those books",
+      "With the switch off everything works exactly as before, so the change can be taken back at once"
+    ]
+  },
+  {
     "version": "1.11.2",
     "date": "2026-11-21",
     "releasedAtIST": "21 Nov 2026, time set at deploy",
