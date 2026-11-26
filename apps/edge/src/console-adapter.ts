@@ -73,7 +73,7 @@ export function consoleAdapter(clock: number = Date.now()): Adapter<Env> {
       if (!key) return null;
       if (env.ORGANIZER_SECRET && key === env.ORGANIZER_SECRET) return { org: null, kind: "platform", eid: null };
       const kh = await sha("key|" + key);
-      const r = await env.DB.prepare("SELECT org, kind, eid, host_id, label, created_by FROM organizer_key WHERE hash=? AND revoked=0 AND (expires_ms IS NULL OR expires_ms>?)").bind(kh, now).first<any>();
+      const r = await env.DB.prepare("SELECT org, kind, eid, host_id, label, created_by FROM organizer_key WHERE hash=? AND revoked=0 AND scope_eid IS NULL AND (expires_ms IS NULL OR expires_ms>?)").bind(kh, now).first<any>(); // a key the game made for ONE game (scope_eid) is not a console key
       if (!r) return null;
       if (r.label === CONSOLE_KEY_LABEL) { if (r.eid && (await keyGameEnded(env, r.eid, now))) return null; return { org: r.org, kind: r.kind, eid: r.eid ?? null, createdBy: r.created_by }; }
       if (r.kind === "host") { const hs = await hostKeyStatus(env.DB, kh, r.host_id, now); if (!hs.usable || !hs.ready) return null; }

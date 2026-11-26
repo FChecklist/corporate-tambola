@@ -5,7 +5,7 @@
   const q = new URLSearchParams(location.search), hs = (() => { try { return history.state || {}; } catch { return {}; } })(), t = q.get("t") || hs.t || "", goParam = q.get("go") || hs.go, ce = q.get("e") || hs.e || "",
     consoleEid = goParam === "console" && /^[A-Za-z0-9_-]{4,40}$/.test(ce) ? ce : "", // a hand-off from the master console: opens THIS game's own screen (the console never shows a game itself)
     go = goParam === "ai" ? "/ai-link.html" : consoleEid ? "/zc.html?e=" + consoleEid : "/zc.html";
-  try { history.replaceState({ t, go: go === "/ai-link.html" ? "ai" : consoleEid ? "console" : "", e: consoleEid }, "", location.pathname); } catch {} // the token leaves the address bar at once // the token leaves the address bar at once
+  try { history.replaceState({ t, go: go === "/ai-link.html" ? "ai" : consoleEid ? "console" : "", ...(consoleEid ? { e: consoleEid } : {}) }, "", location.pathname); } catch {} // the token leaves the address bar at once // the token leaves the address bar at once
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const handoff = async () => { // the link was made a moment ago by the console for a signed-in person and is opened by their own browser; it works once, for a minute, for this one game
     app.innerHTML = `<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard zform"><h2>Opening your game</h2><p class="zsmall" id="hmsg">One moment.</p></div>`;
