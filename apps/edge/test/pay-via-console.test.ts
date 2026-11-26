@@ -92,12 +92,33 @@ describe("the console pay step in Tambola (new path)", () => {
   });
   test("the old pay, credit and proforma routes answer 410 with the console's address; Razorpay's webhook is not shut", async () => {
     const a = await organizer("alice6@acme.com");
-    for (const [m, p] of [["POST", "/api/checkout"], ["POST", "/api/payments/test"], ["POST", "/api/payments/paytest"], ["POST", "/api/payments/verify"], ["POST", "/api/proforma"], ["GET", "/api/org/credit"], ["POST", "/api/z/game0007/pay-with-credit"]] as const) {
+    for (const [m, p] of [["POST", "/api/checkout"], ["POST", "/api/payments/test"], ["POST", "/api/payments/paytest"], ["POST", "/api/payments/verify"], ["POST", "/api/proforma"], ["GET", "/api/org/credit"], ["POST", "/api/z/game0007/pay-with-credit"], ["POST", "/api/z/game0007/paylink"], ["GET", "/api/paylink/" + "a".repeat(48)], ["POST", "/api/paylink/" + "a".repeat(48) + "/checkout"]] as const) {
       const r = await call(m, p, m === "POST" ? {} : undefined, { "x-organizer": a.key });
       expect([m, p, r.status]).toEqual([m, p, 410]);
       expect((await j(r)).console).toBe("https://console.test");
     }
     expect((await call("POST", "/api/payments/webhook", {}, {})).status).not.toBe(410);
+  });
+});
+
+describe("assertion checks on both console pay routes", () => {
+  beforeEach(async () => { await boot("1"); });
+  test("a 'payable' assertion sent to /paid, a reused id, and a bad signature are all 401 on both routes", async () => {
+    const a = await organizer("alice9@acme.com"); await draft(a.key, "game0009");
+    const wrong = await asr({ act: "payable", person: a.who, eid: "game0009" });
+    expect((await call("POST", "/api/console/paid", { assertion: wrong, eid: "game0009", item: "100", orderRef: "GAME-tambola-y1" })).status).toBe(401);
+    expect((await call("POST", "/api/console/payable", { assertion: await asr({ act: "paid", person: a.who, eid: "game0009" }), eid: "game0009" })).status).toBe(401);
+    const tok = await asr({ act: "paid", person: a.who, eid: "game0009" });
+    const body = { assertion: tok, eid: "game0009", item: "100", orderRef: "GAME-tambola-y2" };
+    expect((await call("POST", "/api/console/paid", body)).status).toBe(200);
+    expect((await call("POST", "/api/console/paid", body)).status).toBe(401); // same jti twice
+    const ptok = await asr({ act: "payable", person: a.who, eid: "game0009" });
+    expect((await call("POST", "/api/console/payable", { assertion: ptok, eid: "game0009" })).status).toBe(200);
+    expect((await call("POST", "/api/console/payable", { assertion: ptok, eid: "game0009" })).status).toBe(401);
+    const forged = (await buildAssertion(ctx, { act: "paid", person: a.who, eid: "game0009", mutate: { forge: true } }, origin, T)).token;
+    expect((await call("POST", "/api/console/paid", { assertion: forged, eid: "game0009", item: "100", orderRef: "GAME-tambola-y3" })).status).toBe(401);
+    const forgedP = (await buildAssertion(ctx, { act: "payable", person: a.who, eid: "game0009", mutate: { forge: true } }, origin, T)).token;
+    expect((await call("POST", "/api/console/payable", { assertion: forgedP, eid: "game0009" })).status).toBe(401);
   });
 });
 

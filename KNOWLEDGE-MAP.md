@@ -8,6 +8,7 @@ Written by BOSS for every repository, so any session knows what is done and what
 
 - Runs at: corporate-tambola.pages.dev (Cloudflare Pages + D1)
 
+- Payments (1.12.0, not yet live): with the Pages variable `PAY_VIA_CONSOLE=1` the game takes no payment itself; the console calls `POST /api/console/payable` and `/api/console/paid`; rollback = unset the flag.
 - Status: Live. The exact live commit is in /version.json on the site.
 
 ## All products and repositories

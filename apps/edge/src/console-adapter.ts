@@ -208,7 +208,7 @@ export function scopedKeyMayCall(eid: string, method: string, path: string): boo
 
 /** PAY_VIA_CONSOLE = "1" (owner order 27 Nov 2026): this game's own pay, credit and proforma routes answer 410 and nothing is opened with Razorpay. Money is the console's (-> Moneypenny -> IT Services). The code and tables stay for rollback (flag off = as before).
  *  NOT blocked: Razorpay's own notice (/api/payments/webhook) and read-only status, so a payment made before the switch is still recorded; invoices already issued stay readable. */
-export const PAY_VIA_CONSOLE_BLOCKED = /^\/api\/(checkout|proforma|org\/credit|payments\/(test|paytest|verify))(\/|$)|^\/api\/z\/[A-Za-z0-9_-]{4,40}\/(pay-with-credit|apply-credit)$/;
+export const PAY_VIA_CONSOLE_BLOCKED = /^\/api\/(checkout|proforma|org\/credit|payments\/(test|paytest|verify))(\/|$)|^\/api\/z\/[A-Za-z0-9_-]{4,40}\/(pay-with-credit|apply-credit|paylink)$|^\/api\/paylink\/[0-9a-f]{48}(\/checkout)?$/;
 export function payViaConsoleBlock(env: { PAY_VIA_CONSOLE?: string; CONSOLE_ORIGIN?: string }, method: string, path: string): Response | null {
   if (env.PAY_VIA_CONSOLE !== "1" || method === "OPTIONS" || !PAY_VIA_CONSOLE_BLOCKED.test(path)) return null;
   return new Response(JSON.stringify({ error: "Payments for this game are made in your console.", console: (env.CONSOLE_ORIGIN || "https://console.corporatetambola.com").replace(/\/$/, "") }), { status: 410, headers: { "content-type": "application/json", "cache-control": "no-store" } });
