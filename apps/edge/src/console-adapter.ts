@@ -5,7 +5,9 @@ import type { Adapter, KeyAuth, RoleRow } from "./console-bridge/bridge";
 import type { D1 as BridgeD1 } from "./console-bridge/d1";
 import { PACKS } from "../../../packages/shared/src/pricing";
 import { DEMO_CAP } from "../../../packages/beacon/src/config";
-import { MAX_DRAFTS, sendMail, type PayEnv } from "./pay";
+import { MAX_DRAFTS, LATE_PAY_LEAD_ROUNDS, sendMail, type PayEnv } from "./pay";
+import { GRACE_ROUNDS } from "../../../packages/beacon/src/config";
+import { pendingEmail } from "./payfirst";
 import { openText, sealText } from "./pii";
 import { testFlag } from "./mode";
 import { hostKeyStatus } from "./hostsetup";
@@ -148,6 +150,40 @@ export function consoleAdapter(clock: number = Date.now()): Adapter<Env> {
       const text = `You have been invited to be a ${role} of the Corporate Tambola game "${m.gameName}".\n\nTo accept: open ${console_} , sign in with THIS e-mail address (a code is sent to it), and press Accept under "Needs your attention".\n\nIf this was not meant for you, ignore this e-mail: nothing happens until you accept.`;
       await sendMail(env as PayEnv, env.DB, m.to, `You are invited as ${role}: ${m.gameName}`, text, clock);
     },
+    // ---- the pay step (console drives; docs/PAY_STEP.md in the console repo). Tambola holds NO wallet and takes NO money here: Moneypenny charged the credits, the console says "paid", this game unlocks the game. ----
+    payInfo: async (env, o) => { // read-only
+      const g = await env.DB.prepare("SELECT org, cap, pack, config FROM engagement WHERE id=?").bind(o.eid).first<{ org: string | null; cap: number; pack: number | null; config: string | null }>();
+      const who = await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(o.sub).first<{ org: string }>();
+      const owner = !!(g && who && g.org && who.org === g.org);
+      if (!owner || !g) return { owner: false, item: null, paid: false };
+      const paid = Number(g.pack ?? 0) > 0 && !!(await env.DB.prepare("SELECT 1 AS x FROM kv WHERE k=?").bind(`pub/${o.eid}`).first());
+      const size = PACKS.find((p) => p[0] >= Number(g.cap));
+      return { owner: true, item: paid ? String(g.pack) : size && Number(g.cap) > FREE_DEMO ? String(size[0]) : null, paid };
+    },
+    markPaid: async (env, o) => { // repeatable by orderRef; a definite refusal means NOTHING was changed
+      const refuse = (m: string) => Object.assign(new Error(m), { definite: true });
+      const db = env.DB, now = o.nowMs;
+      const g = await db.prepare("SELECT org, cap, pack, start_round, cancelled_ms, unplayed_ms FROM engagement WHERE id=?").bind(o.eid).first<any>();
+      const who = await db.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(o.sub).first<{ org: string }>();
+      if (!g || !who || !g.org || who.org !== g.org) throw refuse("This game does not belong to the person who paid.");
+      if (await db.prepare("SELECT 1 AS x FROM payment WHERE id=? AND status='paid'").bind(o.orderRef).first()) return; // this order already marked it: repeat
+      if (g.cancelled_ms || g.unplayed_ms) throw refuse("This game was cancelled or closed.");
+      if (Number(g.pack ?? 0) > 0) throw refuse("This game is already paid by another payment.");
+      const pack = Number(o.item);
+      const size = PACKS.find((p) => p[0] >= Number(g.cap));
+      if (!Number.isInteger(pack) || !size || size[0] !== pack) throw refuse("The size paid for is not the size of this game.");
+      const test = await testFlag(env);
+      // the pack record: no money in this game's books (amount 0, no Razorpay ids); the order id of Moneypenny is the payment id. No invoice, no commission here: those belong to IT Services and Moneypenny.
+      await db.prepare("INSERT OR IGNORE INTO payment(id,org,email,pack,currency,amount,tax,status,created_ms,paid_ms,meta,result,is_test) VALUES(?,?,?,?,?,0,0,'paid',?,?,?,?,?)").bind(o.orderRef, g.org, pendingEmail(o.orderRef), pack, "INR", now, now, JSON.stringify({ eid: o.eid, via: "console", orderRef: o.orderRef }), JSON.stringify({ ok: true, orderId: o.orderRef, pack, published: true, eid: o.eid, via: "console" }), test).run();
+      await db.prepare("INSERT OR IGNORE INTO entitlement(id,org,pack,payment_id,eid,created_ms) VALUES(?,?,?,?,?,?)").bind("ent_" + o.orderRef, g.org, pack, o.orderRef, o.eid, now).run();
+      await db.prepare("UPDATE engagement SET pack=?, cap=MIN(cap, ?) WHERE id=? AND org=? AND pack=0 AND cancelled_ms IS NULL AND unplayed_ms IS NULL").bind(pack, pack, o.eid, g.org).run();
+      await db.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`pub/${o.eid}`, String(now)).run();
+      await db.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`paidby/${o.eid}`, JSON.stringify({ by: "organizer", ms: now, via: "console" })).run();
+      if ((1692803367 + (Number(g.start_round) - 1) * 3) * 1000 <= now) { // it was held because it was not paid at its start time: the first number comes 2 minutes after the payment, as for any late payment (pay.ts)
+        const restart = Math.floor((now / 1000 - 1692803367) / 3) + 2 + LATE_PAY_LEAD_ROUNDS - GRACE_ROUNDS;
+        await db.prepare("UPDATE engagement SET start_round=? WHERE id=?").bind(restart, o.eid).run();
+      }
+    },
     seal: async (env, t) => sealText(env as any, t),
     unseal: async (env, s) => (await openText(env as any, s)) ?? "",
   };
@@ -168,4 +204,12 @@ export function scopedKeyMayCall(eid: string, method: string, path: string): boo
   const m = /^\/api\/z\/([^/]+)(\/.*)?$/.exec(path);
   if (m) return decodeURIComponent(m[1] as string) === eid;
   return false;
+}
+
+/** PAY_VIA_CONSOLE = "1" (owner order 27 Nov 2026): this game's own pay, credit and proforma routes answer 410 and nothing is opened with Razorpay. Money is the console's (-> Moneypenny -> IT Services). The code and tables stay for rollback (flag off = as before).
+ *  NOT blocked: Razorpay's own notice (/api/payments/webhook) and read-only status, so a payment made before the switch is still recorded; invoices already issued stay readable. */
+export const PAY_VIA_CONSOLE_BLOCKED = /^\/api\/(checkout|proforma|org\/credit|payments\/(test|paytest|verify))(\/|$)|^\/api\/z\/[A-Za-z0-9_-]{4,40}\/(pay-with-credit|apply-credit)$/;
+export function payViaConsoleBlock(env: { PAY_VIA_CONSOLE?: string; CONSOLE_ORIGIN?: string }, method: string, path: string): Response | null {
+  if (env.PAY_VIA_CONSOLE !== "1" || method === "OPTIONS" || !PAY_VIA_CONSOLE_BLOCKED.test(path)) return null;
+  return new Response(JSON.stringify({ error: "Payments for this game are made in your console.", console: (env.CONSOLE_ORIGIN || "https://console.corporatetambola.com").replace(/\/$/, "") }), { status: 410, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 }

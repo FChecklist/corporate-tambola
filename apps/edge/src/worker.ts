@@ -42,7 +42,7 @@ import { acceptOver, acceptWon, endBoundMs, realEndMs, neverStarted, eraseEveryt
 import { PAY_SCHEMA, drainBulkMail, issueDueInvoices, payRoute, retryOutbox, retryRecentOutbox, sendMail, freeLaunch, payMode, FREE_CAP, MAX_DRAFTS, type PayEnv } from "./pay";
 import { handleConsole } from "./console-bridge/bridge";
 import { BRIDGE_SCHEMA } from "./console-bridge/schema";
-import { consoleAdapter, CONSOLE_KEY_LABEL, keyGameEnded, scopedKeyMayCall } from "./console-adapter";
+import { consoleAdapter, CONSOLE_KEY_LABEL, keyGameEnded, scopedKeyMayCall, payViaConsoleBlock } from "./console-adapter";
 import { PACKS, price } from "../../../packages/shared/src/pricing";
 import { PARTNER_SCHEMA, partnerRoute } from "./partners";
 import { HELPDESK_SCHEMA, HELPER_MANUAL_NOTE, helpdeskCloseStatements, helpdeskRoute, helpdeskSweep, isDeskKeyId, isHelperKey, noteHelperGame } from "./helpdesk";
@@ -601,7 +601,7 @@ export async function runTick(env: Env, now: number) {
   await adminTick(env.DB, now); // old error counters and old mail events go (admin.ts)
   await remindUnpaid(env, now);
   await remindDrafts(env, now);
-  const ledgerC = await ledgerCTick(env as PayEnv, now); // ledger C -> B: a few commission rows and, every 30 minutes, the monthly figures (ledgerc.ts)
+  const ledgerC = (env as PayEnv).PAY_VIA_CONSOLE === "1" ? null : await ledgerCTick(env as PayEnv, now); // off when payments go through the console (the old own-payment ledger job); // ledger C -> B: a few commission rows and, every 30 minutes, the monthly figures (ledgerc.ts)
   const life = await lifecycleTick(env as any, now);
   const purged = await purgeOld(env, now);
   const mailRetried = await retryRecentOutbox(env as PayEnv, now).catch(() => 0); // a mail that failed (an invoice, a paid note) is tried again within minutes, not at the next daily job (RCA 2026-11-20)
@@ -1045,6 +1045,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   { const rm = p.match(/^\/api\/report\/([A-Za-z0-9_-]{4,40})$/); if (rm && req.method === "GET") return reportApi(env as any, rm[1]!, url, now); } // the report page; the key in the link is the only credential
   // 1.8.3: a Co-host who accepted the role under an OLDER terms version keeps working (anyVersion = true): a version string never locks anyone out mid-game; only a NEW acceptance carries the current version
   if (a.kind === "cohost" && req.method === "POST" && (p === "/api/checkout" || /^\/api\/z\/[A-Za-z0-9_-]{4,40}\/pay-with-credit$/.test(p) || p === "/api/proforma" || p === "/api/payments/test" || p === "/api/org/credit" || p.startsWith("/api/org/credit/")) && !(await hasConsent(env.DB, "c:" + (await sha("key|" + (req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")))).slice(0, 16), "K5", true))) return json({ error: "Please tick the box to continue.", code: "consent-required", kind: "K5", version: CONSENT_VERSION }, 400); // a Co-host pays and uses credit only after accepting the role (these routes run before the general K5 gate below)
+  { const pb = payViaConsoleBlock(env as PayEnv, req.method, p); if (pb) return pb; } // PAY_VIA_CONSOLE=1: the game's own pay, credit and proforma routes are shut (console-adapter.ts)
   const paid = await payRoute(req, env as PayEnv, now, (n) => spend(env, now, n));
   if (paid) return paid;
   { const cr = await creditRoute(req, env as PayEnv, now, (n) => spend(env, now, n), a); if (cr) return cr; } // credit instead of refunds: the account's credit, and paying a game with it (credit.ts)
