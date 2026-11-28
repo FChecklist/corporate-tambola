@@ -34,6 +34,7 @@
   };
   // ---------- what the game's public settings say besides the plan: the brand strip, a cancelled game; and a personal invite link's token ----------
   const TOKEN = (q.get("t") || "").trim().slice(0, 80); // a personal link: sent as `token` when joining, so no mobile number is needed
+  const claimBy = (tail = "") => { const w = Number(INFO.claimWindow) > 1 ? Number(INFO.claimWindow) : 1; return w > 1 ? `within ${w} numbers of the winning number` : "before the next number" + tail; }; /* 1.13.0: the words follow the game's own claim time (default: before the next number) */
   const INFO = { brand: null, cancelled: null, dns: false, demo: false }; // demo = a DEMO GAME (free, up to 10 people): every screen says so, and the ticket carries a DEMO GAME watermark until the organizer makes it a real game // dns = "this game did not start": nobody paid, the time and 20 hours passed, the guest data was auto-deleted
   const cleanBrand = (b) => {
     if (!b || typeof b !== "object") return null;
@@ -54,6 +55,7 @@
     if ("open" in r) INFO.open = r.open === true; // 1.8.1: anyone can join with a mobile number (not a list or ID game)
     if ("verify" in r) { INFO.verify = r.verify === "id" || r.verify === "either" || r.verify === "both" ? r.verify : "mobile"; INFO.empOnly = r.employeesOnly === true; INFO.idKind = r.idKind === "email" ? "email" : "emp"; INFO.idClean = r.idClean === true; }
     if ("rehearsal" in r) INFO.rehearsal = r.rehearsal && typeof r.rehearsal === "object" ? r.rehearsal : null; // a rehearsal: its pages carry the REHEARSAL block and, once it is over, the calm "over" page
+    INFO.claimWindow = Number(r.claimWindow) > 1 ? Number(r.claimWindow) : 1;
     if ("startMs" in r && Number.isFinite(Number(r.startMs))) { INFO.startMs = Number(r.startMs); INFO.manualStart = r.startMode === "manual"; } // TA22: the join page says "already running" before the person joins
     if ("checkin" in r) INFO.checkin = r.checkin === true; // a game made after the check-in rule: the ticket opens only after the person marks themselves present
     if ("tickets" in r) INFO.demo = r.demo === true; // the public settings say whether it is a demo game; after a paid conversion the next read clears it
@@ -216,7 +218,7 @@
     <div class="zcard zform zjoin"><h2>Join the game</h2>
     ${welcomeLine(personal)}
     <ol class="zsteps" aria-label="How to join"><li><b>1</b><span>Tick the boxes</span></li><li><b>2</b><span>${personal ? "Press the button" : (INFO.verify || "mobile") === "id" ? "Type your ID" : "Type your number"}</span></li><li><b>3</b><span>Get your ticket</span></li></ol><p class="zsmall zdnd" id="dndtip">Tip: turn on Do Not Disturb so other apps do not interrupt your game.</p>
-    ${lateTip()}<p class="zsmall" id="soundtip" style="margin:0 0 6px">Sound is off, so your phone stays quiet in the office. To hear the numbers read out, press Sound on your ticket page.</p><p class="zgoalline" style="margin:0 0 6px">Numbers are called one by one. Tap each one on your ticket as it is called. When a row or the whole ticket is complete, press Claim before the next number: the software checks it, no need to shout.</p>${INVITE_FROM ? `<div class="zbanner ok" style="margin:0 0 8px">You were invited by a colleague or family member. Join with your own mobile number to get your own ticket.</div>` : ""}
+    ${lateTip()}<p class="zsmall" id="soundtip" style="margin:0 0 6px">Sound is off, so your phone stays quiet in the office. To hear the numbers read out, press Sound on your ticket page.</p><p class="zgoalline" style="margin:0 0 6px">Numbers are called one by one. Tap each one on your ticket as it is called. When a row or the whole ticket is complete, press Claim ${claimBy()}: the software checks it, no need to shout.</p>${INVITE_FROM ? `<div class="zbanner ok" style="margin:0 0 8px">You were invited by a colleague or family member. Join with your own mobile number to get your own ticket.</div>` : ""}
     ${INAPP ? `<p class="zsmall" style="margin:0 0 8px">Tip: if this link opened inside another app, open it in Chrome or Safari and always use that same one for this game.</p>` : ""}${J.mode === "needPhone" && !msg ? `<div class="zbanner info" role="status" style="margin:0 0 8px">${J.note ? esc(J.note) : "This link was already opened on another phone. Please type your mobile number to get your ticket."}</div>` : ""}
     ${DEMO ? "" : CBConsent.html("K4")}
     ${personal ? `<p class="zsmall" style="margin:0 0 6px">Your personal link is ready. Press the button to get your ticket.</p>` : joinWho()}
@@ -379,7 +381,7 @@
     return `<div class="zcard zwait">${top}
       <div class="zdo"><b>What to do:</b> nothing yet. Keep this page open. When the numbers start, tap each one on your ticket as it is called.</div>
       ${prizes ? `<h3>What you can win</h3><ul class="zlist">${prizes}</ul>` : ""}
-      <h3>How it works</h3><ol class="zlist"><li>Your ticket is below. Numbers are called one by one. You see only the number just called, so stay alert.</li><li>Tap each number on your ticket as it is called. The ticket does not mark itself.</li><li>When a row or the whole ticket is complete, press <b>Claim</b> before the next number is called. The software checks it against the called numbers, you do not need to shout.</li><li>A wrong claim is a <b>Bogey</b>: it does not count. Two Bogeys on the same prize and your ticket is out of that prize.</li><li>The organizer hands over the rewards.</li></ol><p class="zsmall zfairlink"><a href="/fair.html" target="_blank" rel="noopener">How we keep it fair</a></p>
+      <h3>How it works</h3><ol class="zlist"><li>Your ticket is below. Numbers are called one by one. You see only the number just called, so stay alert.</li><li>Tap each number on your ticket as it is called. The ticket does not mark itself.</li><li>When a row or the whole ticket is complete, press <b>Claim</b> ${claimBy(" is called")}. The software checks it against the called numbers, you do not need to shout.</li><li>A wrong claim is a <b>Bogey</b>: it does not count. Two Bogeys on the same prize and your ticket is out of that prize.</li><li>The organizer hands over the rewards.</li></ol><p class="zsmall zfairlink"><a href="/fair.html" target="_blank" rel="noopener">How we keep it fair</a></p>
       <button class="zbtn s alt" id="soundtest">Check my sound</button><a class="zbtn s alt" id="addcal" download="game.ics" href="${icsFor(v)}">Add to my calendar</a></div>`;
   }
 
@@ -959,7 +961,7 @@
       ${v.phase === "ended" ? "" : prizesCard()}
       ${mineCard(v)}${inviteCard(v)}
       <div class="zcard"><h2>Still to win</h2>${still}${chk}</div>
-      ${luckyCard(v)}${v.phase === "ended" ? "" : '<details class="zrulesrow" id="zrulesrow"><summary>Rules</summary><ol class="zrules" id="zrules"><li>This game works like the real one.</li><li>When a number is called, tap it on your ticket to cross it out.</li><li>If you complete a prize, press Claim before the next number is called.</li></ol><p class="zsmall zprizes"><b>About the prizes.</b> Every prize in this game is chosen and given by your organizer, as a gift of thanks to the team. It may come as cash, a voucher or a gift, entirely as your organizer prefers. Corporate Tambola only runs the game and keeps the record. It plays no part in choosing, valuing or giving the prizes.</p></details>'}</div>${claimStick(v)}${toastHtml()}${bogeyAskHtml()}`;
+      ${luckyCard(v)}${v.phase === "ended" ? "" : '<details class="zrulesrow" id="zrulesrow"><summary>Rules</summary><ol class="zrules" id="zrules"><li>This game works like the real one.</li><li>When a number is called, tap it on your ticket to cross it out.</li><li>If you complete a prize, press Claim ' + claimBy(' is called') + '.</li></ol><p class="zsmall zprizes"><b>About the prizes.</b> Every prize in this game is chosen and given by your organizer, as a gift of thanks to the team. It may come as cash, a voucher or a gift, entirely as your organizer prefers. Corporate Tambola only runs the game and keeps the record. It plays no part in choosing, valuing or giving the prizes.</p></details>'}</div>${claimStick(v)}${toastHtml()}${bogeyAskHtml()}`;
   }
 
   // ---------- present check-in: the ticket opens only after this ----------

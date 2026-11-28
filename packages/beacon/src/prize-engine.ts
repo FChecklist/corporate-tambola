@@ -5,7 +5,7 @@
 // Late joiners: a participant who joined after the game began counts only the numbers whose beacon round is at or after `countFrom`
 // (their join round plus LATE_LAG_ROUNDS), so every phone has heard of them before their first number counts and nobody's result changes later.
 import { ticketNumbers } from "../../shared/src/ticket";
-import { CLAIM_WINDOW_CALLS, LATE_LAG_ROUNDS, keysInPlay, linesFor, roundEid, baseKey, ticketOfKey, type EngagementCfg, type PatternKey } from "./config";
+import { claimWindowOf, LATE_LAG_ROUNDS, keysInPlay, linesFor, roundEid, baseKey, ticketOfKey, type EngagementCfg, type PatternKey } from "./config";
 import { ruleOf } from "./house-rules";
 import { claimCounts, claimsByHouse, ticketsFor, unluckyAt, unluckyPick, winnersOfHouse, type HouseClaims, type PublicClaim, type Settled } from "./game";
 import { NUMBERS } from "./index";
@@ -87,7 +87,7 @@ export class PrizeEngine {
     const h = this.claims;
     const out: [number, string[]][] = [];
     for (const [j, pids] of all) {
-      const nextBr = this.callBr[j + CLAIM_WINDOW_CALLS] ?? this.roundOfCall?.(j + CLAIM_WINDOW_CALLS) ?? undefined; // the call's own round; from the clock schedule when this phone's log has not got that call yet; undefined only when it cannot be told yet: the window is still open
+      const nextBr = this.callBr[j + claimWindowOf(this.cfg)] ?? this.roundOfCall?.(j + claimWindowOf(this.cfg)) ?? undefined; // the call's own round; from the clock schedule when this phone's log has not got that call yet; undefined only when it cannot be told yet: the window is still open
       const kept = pids.filter((pid) => claimCounts(h, k, pid, j, nextBr));
       if (kept.length) out.push([j, kept]);
     }

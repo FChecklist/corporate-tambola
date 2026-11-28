@@ -1,7 +1,7 @@
 // The phone-side game: everything a phone (or the organizer's console) needs to play and to check an engagement
 // from the public beacon alone. Pure and deterministic: no server, no phone clock.
 import { generateTicket, ticketNumbers, type PatternId, type Ticket } from "../../shared/src/ticket";
-import { CLAIM_WINDOW_CALLS, INTERMISSION_ROUNDS, PATTERN_ORDER, breakShift, keyOfLine, ticketOfKey, defaultCfg, keysInPlay, linesFor, roundEid, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
+import { claimWindowOf, INTERMISSION_ROUNDS, PATTERN_ORDER, breakShift, keyOfLine, ticketOfKey, defaultCfg, keysInPlay, linesFor, roundEid, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
 import { hostCallRound, pauseShifts, pushedByPauses, schedulePauses, type ControlState, type GameOpts } from "./control";
 
 /** What the control file needs from the game's public settings (who calls the numbers, the breaks and rounds a press must respect): pass it to cfgOf / publishControl. */
@@ -129,7 +129,7 @@ export function settleAll(engagementId: string, pids: readonly string[], log: re
       const i = completionIndexKey(tk, k, mine);
       if (i < 0) continue;
       if (k === "full") { const a = fullAll.get(i); if (a) a.push(pid); else fullAll.set(i, [pid]); }
-      if (byHouse && !claimCounts(byHouse, k, pid, i, cl!.callRounds?.[i + CLAIM_WINDOW_CALLS])) continue; // no claim, a wrong one, a late one, or out by Bogeys: not a winner
+      if (byHouse && !claimCounts(byHouse, k, pid, i, cl!.callRounds?.[i + claimWindowOf(cfg)])) continue; // no claim, a wrong one, a late one, or out by Bogeys: not a winner
       const g = best.get(k)!; const arr = g.get(i); if (arr) arr.push(pid); else g.set(i, [pid]);
     }
   }

@@ -24,6 +24,7 @@ One question was the owner's and is now decided (14 Nov 2026): a winner's name, 
 | [10-RELEASE-1.11.1.md](10-RELEASE-1.11.1.md) | Release 1.11.1: the leftovers of the 1.11.0 audits (caps on data-request mail and Help Desk invitation mail, neutral wording of the mail note, true release lines, masked addresses), and why it is a new version |
 | [11-RELEASE-1.11.2.md](11-RELEASE-1.11.2.md) | Release 1.11.2: the two audits of 1.11.1 (data-request mail capped for the whole site and per address, Help Desk limit counts the mailbox, a true answer to a player, the owner address out of the tests) |
 | [12-RELEASE-1.12.0.md](12-RELEASE-1.12.0.md) | Release 1.12.0: payments through the console only (PAY_VIA_CONSOLE, payable/paid, rollback = flag off) |
+| [13-RELEASE-1.13.0.md](13-RELEASE-1.13.0.md) | Release 1.13.0: claim time option (1 to 10 numbers), default unchanged |
 | [OWNER-NOTE.md](OWNER-NOTE.md) | The note written for the owner, in plain words |
 | [HANDOVER.md](HANDOVER.md) | The builder's hand-over note |
 

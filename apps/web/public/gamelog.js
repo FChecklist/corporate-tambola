@@ -58,7 +58,7 @@
     L.push(["row", "Joined after the first number", String(log.people.late)]);
     if (log.people.present != null) L.push(["row", "Checked in as present", String(log.people.present)]);
     L.push(["h", "Prizes"]);
-    L.push(["note", ZG.claimRuleText(log.ties)]);
+    L.push(["note", ZG.claimRuleText(log.ties, log.claimWindow)]);
     for (const c of (log.claims || [])) L.push(["row", `Ticket ${c.ticket} claimed ${c.prize}${c.afterNumber ? " after number " + c.afterNumber : ""}`, `${c.outcome === "accepted" ? "accepted" : c.outcome === "prize taken" ? "Prize already taken: this claim came at number " + c.afterNumber + ", after the prize was already awarded at number " + c.takenAtNumber + "." : c.outcome === "wrong" ? "wrong (a Bogey)" : "too late, refused"} · ${HMS(c.atMs)}`]);
     if (log.claimsMore) L.push(["row", `... and ${log.claimsMore} more too-late ${log.claimsMore === 1 ? "claim" : "claims"}`, "(this list keeps the newest 200 of them)"]);
     if (!log.prizes.length) L.push(["note", "No prize was won."]);
