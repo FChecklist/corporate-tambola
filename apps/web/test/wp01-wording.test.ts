@@ -27,7 +27,7 @@ describe("TA10: the lost-claim lines reach the phone", () => {
 
 describe("TA19: no screen or report prints a fixed prize-tie rule", () => {
   test("the game log page asks the shared rule text for the game's real setting; the shipped bundles carry it", () => {
-    const g = pub("gamelog.js"); expect(g).toContain("ZG.claimRuleText(log.ties)"); expect(g).not.toContain("wins that prize together");
+    const g = pub("gamelog.js"); expect(g).toContain("ZG.claimRuleText(log.ties, log.claimWindow)"); expect(g).not.toContain("wins that prize together");
     expect(pub("zgame.js")).toContain("they take the next prizes one after the other"); expect(pub("reportgen.js")).toContain("they take the next prizes one after the other"); // rebuilt with bun run build:zgame / build:report
   });
 });

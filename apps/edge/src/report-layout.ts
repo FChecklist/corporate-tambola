@@ -101,7 +101,7 @@ export function layoutReport(d: ReportData): Uint8Array {
   pdf.h1("3. Prizes and winners");
   { const t0 = d.prizes.length, w0 = d.prizes.filter((p) => p.winners.length).length;
   pdf.para(`${t0} prize lines were set up; ${w0} were won (${t0 - w0} not won).`, { size: 9.5, gap: 4 });
-  pdf.para(claimRuleText(d.log?.ties), { size: 9, gap: 4 });
+  pdf.para(claimRuleText(d.log?.ties, d.log?.claimWindow), { size: 9, gap: 4 });
   for (const line of d.takenClaims ?? []) pdf.para(line, { size: 9, gap: 2 }); }
   for (const pr of d.prizes) {
     pdf.h2(`${d.rounds > 1 ? `Round ${pr.round}  |  ` : ""}${pr.label}${pr.text ? `   -   ${pr.text}` : ""}`);

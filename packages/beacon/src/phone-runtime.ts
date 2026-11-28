@@ -4,7 +4,7 @@ import { beatOffsetMs, beatPeriodMs, followUpSpreadMs, msToNextBeat, presenceK, 
 import { generateTicket, type Ticket } from "../../shared/src/ticket";
 import { winningNumbers } from "./house-rules";
 import { ALL_SAFETIES, ControlTracker, SAFETY_FAST, SAFETY_STANDARD, hostControlOf, pausedAt, type ControlConfig } from "./control";
-import { CLAIM_LATE_TEXT, CLAIM_WINDOW_CALLS, GRACE_ROUNDS, LATE_LAG_ROUNDS, defaultCfg, houseLabel, keysInPlay, linesFor, roundEid, validateCfg, votersFor, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
+import { claimLateText, claimWindowOf, GRACE_ROUNDS, LATE_LAG_ROUNDS, defaultCfg, houseLabel, keysInPlay, linesFor, roundEid, validateCfg, votersFor, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
 import { PrizeEngine, countFromOf } from "./prize-engine";
 import { BOGEYS_OUT, RoundStore, activeBreak, activeIntermission, callRoundR, completionIndexKey, hostGameOf, luckyRound, luckyWinners, ticketsFor, type PublicClaim } from "./game";
 import { seatOfPid } from "./unique-ticket";
@@ -195,7 +195,7 @@ export class PhoneRuntime {
 
   /** Tickets, rewards and brand breaks come from the engagement's public settings; anything malformed falls back to the plain engagement. */
   private readCfg(info: any) {
-    const v = validateCfg({ tickets: info?.tickets, ties: info?.ties, rewards: info?.rewards, breaks: info?.breaks, rounds: info?.rounds, invites: info?.invites, opening: info?.opening, closing: info?.closing, callMode: info?.callMode === "host" ? "host" : undefined, startMode: info?.startMode === "manual" ? "manual" : undefined, afterPrizes: info?.afterPrizes === "keep" ? "keep" : undefined }, undefined, { stored: true });
+    const v = validateCfg({ tickets: info?.tickets, ties: info?.ties, rewards: info?.rewards, breaks: info?.breaks, rounds: info?.rounds, invites: info?.invites, opening: info?.opening, closing: info?.closing, callMode: info?.callMode === "host" ? "host" : undefined, startMode: info?.startMode === "manual" ? "manual" : undefined, afterPrizes: info?.afterPrizes === "keep" ? "keep" : undefined, claimWindow: info?.claimWindow }, undefined, { stored: true });
     this.cfg = v.ok ? v.cfg : defaultCfg();
     if (this.tracker) this.tracker.reconfigure(hostControlOf(hostGameOf(this.cfg, this.scheduledRound))); // before the start a re-read keeps the control rules in step
   }
@@ -279,7 +279,7 @@ export class PhoneRuntime {
     if (completionIndexKey(this.tickets, key, this.markedLog(this.cur)) < 0) return { ok: false, bogey: false, error: "Mark every number of this prize on your ticket first, then press Claim." };
     const log = this.maskedLog(this.cur), called = new Set(log.filter((n) => n > 0)), wrong = [...(this.marks.get(this.cur) ?? [])].find((n) => !called.has(n));
     const idx = completionIndexKey(this.tickets, key, log);
-    if (wrong === undefined && idx >= 0 && idx < log.length - 1) { this.lateNote = { text: CLAIM_LATE_TEXT, atLen: log.length }; return { ok: false, bogey: false, late: true, error: CLAIM_LATE_TEXT }; } // THE RULE: a prize completed on number N is claimed before number N+1 is announced. No penalty, nothing is sent.
+    if (wrong === undefined && idx >= 0 && idx < log.length - claimWindowOf(this.cfg)) { this.lateNote = { text: claimLateText(claimWindowOf(this.cfg)), atLen: log.length }; return { ok: false, bogey: false, late: true, error: claimLateText(claimWindowOf(this.cfg)) }; } // THE RULE: a prize completed on number N is claimed before number N+1 is announced. No penalty, nothing is sent.
     if (wrong !== undefined || idx < 0) { // a Bogey: the marks do not stand up against the called numbers. The store is told (every phone must know, so the winners agree).
       const n = this.bogeysOn(key) + 1; this.bogeys.set(id, n); this.saveMarks();
       this.bogeyUnsent.push({ pattern: key, round: this.cur, n }); await this.sendBogeys();
@@ -289,7 +289,7 @@ export class PhoneRuntime {
     this.pressed.add(id); this.saveMarks();
     this.claimLens = []; // make the next autoClaim look again
     await this.autoClaim();
-    if (!this.pressed.has(id) && this.lateNote) return { ok: false, bogey: false, late: true, error: CLAIM_LATE_TEXT }; // the Worker said too late (its clock decides): nothing was sent, and the page says so kindly instead of "Claim saved"
+    if (!this.pressed.has(id) && this.lateNote) return { ok: false, bogey: false, late: true, error: claimLateText(claimWindowOf(this.cfg)) }; // the Worker said too late (its clock decides): nothing was sent, and the page says so kindly instead of "Claim saved"
     return { ok: true, sent: this.claimedAll.has(id), idx };
   }
   /**
@@ -335,7 +335,7 @@ export class PhoneRuntime {
     try {
       const r = await this.deps.api("POST", `/api/z/${this.eid}/join`, { phone, name, ...(empId ? { empId } : {}), ...(email ? { email } : {}), device: this.device(), ...(invite && Number.isInteger(invite.from) ? { from: invite.from, cat: invite.cat } : {}) });
       this.scheduledRound = r.startRound; this.startRound = r.startRound + GRACE_ROUNDS; this.callSeconds = r.callSeconds; this.trackClaims = r.trackClaims !== false;
-      if (r.tickets !== undefined || r.rewards !== undefined || r.breaks !== undefined || r.rounds !== undefined || r.opening !== undefined || r.closing !== undefined || r.callMode !== undefined || r.startMode !== undefined || r.afterPrizes !== undefined) this.readCfg(r);
+      if (r.tickets !== undefined || r.rewards !== undefined || r.breaks !== undefined || r.rounds !== undefined || r.opening !== undefined || r.closing !== undefined || r.callMode !== undefined || r.startMode !== undefined || r.afterPrizes !== undefined || r.claimWindow !== undefined) this.readCfg(r);
       this.deps.store.set(this.key("pid"), r.pid);
       this.myJr = Number(r.jr) > 0 ? Number(r.jr) : 0; this.deps.store.set(this.key("jr"), String(this.myJr));
       this.adopt(r.pid); this.error = null;
@@ -579,7 +579,7 @@ export class PhoneRuntime {
           // this phone knows its own claim at once (the others learn it with the seat list): the store's clock says when it arrived
           if (ans && Number(ans.atMs) > 0) this.noteClaims([{ pid: this.pid, pattern: p, round: r, idx, atMs: Number(ans.atMs) }]);
         } catch (e: any) {
-          if (e?.status === 409 && (e?.code === "claim-late" || /after the next number was announced/.test(String(e?.message)))) { this.pressed.delete(id); this.saveMarks(); this.lateNote = { text: CLAIM_LATE_TEXT, atLen: log.length }; continue; } // too late by the Worker's clock: said kindly, never sent again, nothing recorded
+          if (e?.status === 409 && (e?.code === "claim-late" || /after the next number was announced/.test(String(e?.message)))) { this.pressed.delete(id); this.saveMarks(); this.lateNote = { text: claimLateText(claimWindowOf(this.cfg)), atLen: log.length }; continue; } // too late by the Worker's clock: said kindly, never sent again, nothing recorded
           this.unsent++; /* kept: the next tick sends it again; a claim is never lost because nothing is marked sent until it was */
         }
       }
@@ -633,7 +633,7 @@ export class PhoneRuntime {
    * The last call of a round (or a stopped game): no next number ever comes, so the window is taken as one call gap after it. Host mode before the next press: the window is still open.
    */
   private resultFinal(round: number, idx: number): boolean {
-    const nextK = idx + CLAIM_WINDOW_CALLS;
+    const nextK = idx + claimWindowOf(this.cfg);
     let deadline: number;
     if (nextK < NUMBERS) {
       const nb = this.roundFor(nextK, round);

@@ -1,5 +1,18 @@
 [
   {
+    "version": "1.13.0",
+    "date": "2026-11-28",
+    "releasedAtIST": "28 Nov 2026, time set at deploy",
+    "commit": "this release",
+    "title": "New option: give your guests more time to press Claim (1 to 10 numbers); the default is unchanged",
+    "changes": [
+      "New organizer choice \"How much time does a guest have to press Claim?\": right away (before the next number, exactly as every game worked until now), or up to 3, 5 or 10 numbers after the winning number. Games that do not choose keep the old rule byte for byte",
+      "The same time is used by the server's clock, by every phone's own winner check and by the organizer's results, so everyone agrees on who won; a claim must still be for the real completing number, and a wrong claim is still a Bogey",
+      "The words follow the choice: the late-claim message, the rule line on the ticket page, the game log and the report say \"within N numbers of the winning number\" for a longer time, and the old words for the default",
+      "Not changed: payments, prizes, tickets per player, tie rules, the 90-second late-joiner lag. Three tickets per player and the strip of six are not in this release"
+    ]
+  },
+  {
     "version": "1.12.0",
     "date": "2026-11-27",
     "releasedAtIST": "27 Nov 2026, time set at deploy",
